@@ -1,0 +1,91 @@
+/**
+ * Breez WooCommerce Styles
+ */
+
+.breez-payment-box {
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 20px;
+    background: #f8f8f8;
+    border-radius: 5px;
+    text-align: center;
+}
+
+.breez-payment-status {
+    padding: 15px;
+    border-radius: 5px;
+    margin-bottom: 20px;
+}
+
+.breez-payment-completed {
+    background: #d4edda;
+    color: #155724;
+}
+
+.breez-payment-failed {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.breez-payment-countdown {
+    font-size: 18px;
+    margin-bottom: 20px;
+}
+
+.breez-countdown {
+    font-weight: bold;
+}
+
+.breez-payment-qr {
+    margin-bottom: 20px;
+}
+
+.breez-payment-qr img {
+    max-width: 250px;
+    height: auto;
+}
+
+.breez-invoice-container {
+    position: relative;
+    margin-bottom: 20px;
+}
+
+.breez-invoice-text {
+    width: 100%;
+    padding: 10px;
+    font-family: monospace;
+    font-size: 14px;
+    resize: none;
+}
+
+.breez-copy-button {
+    position: absolute;
+    right: 10px;
+    top: 10px;
+    padding: 5px 10px;
+    background: #0073aa;
+    color: white;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+}
+
+.breez-copy-button:hover {
+    background: #005177;
+}
+
+.breez-payment-info {
+    margin-bottom: 20px;
+}
+
+.breez-payment-refresh {
+    margin-top: 20px;
+}
+
+.breez-payment-expired {
+    background: #f8d7da;
+    color: #721c24;
+    padding: 15px;
+    border-radius: 5px;
+    margin-bottom: 20px;
+}

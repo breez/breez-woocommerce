@@ -1,0 +1,19 @@
+{
+    "name": "breez/woocommerce",
+    "description": "Bitcoin & Lightning payment gateway for WooCommerce using Breez Nodeless API",
+    "type": "wordpress-plugin",
+    "require": {
+        "php": ">=7.2",
+        "aferrandini/phpqrcode": "^1.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Breez\\WooCommerce\\": "includes/"
+        }
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "preferred-install": "dist",
+        "sort-packages": true
+    }
+} 
