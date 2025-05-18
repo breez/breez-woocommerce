@@ -35,16 +35,75 @@ class Breez_Webhook_Handler {
      * Validate webhook request
      *
      * @param WP_REST_Request $request Request object
-     * @return bool Whether the request is valid
+     * @return bool|WP_Error Whether the request is valid
      */
     public static function validate_webhook($request) {
         self::init_logger();
         
-        // For improved security, you could implement signature validation here
-        // For now, we'll just ensure the request is coming from an allowed IP
-        
-        // Return true to allow the webhook to be processed
-        return true;
+        try {
+            // Get the webhook secret from settings
+            $settings = get_option('woocommerce_breez_settings', array());
+            $webhook_secret = isset($settings['webhook_secret']) ? $settings['webhook_secret'] : '';
+            
+            if (empty($webhook_secret)) {
+                self::$logger->log('Webhook validation failed: No webhook secret configured', 'error');
+                return new WP_Error('invalid_webhook', 'No webhook secret configured', array('status' => 401));
+            }
+
+            // Get headers
+            $signature = $request->get_header('X-Breez-Signature');
+            $timestamp = $request->get_header('X-Breez-Timestamp');
+            $nonce = $request->get_header('X-Breez-Nonce');
+
+            // Validate required headers
+            if (empty($signature) || empty($timestamp) || empty($nonce)) {
+                self::$logger->log('Webhook validation failed: Missing required headers', 'error');
+                return new WP_Error('invalid_webhook', 'Missing required headers', array('status' => 401));
+            }
+
+            // Validate timestamp (within 5 minutes)
+            $timestamp_int = (int) $timestamp;
+            $current_time = time();
+            if (abs($current_time - $timestamp_int) > 300) {
+                self::$logger->log('Webhook validation failed: Timestamp expired', 'error');
+                return new WP_Error('invalid_webhook', 'Timestamp expired', array('status' => 401));
+            }
+
+            // Get request body
+            $body = $request->get_body();
+            if (empty($body)) {
+                self::$logger->log('Webhook validation failed: Empty request body', 'error');
+                return new WP_Error('invalid_webhook', 'Empty request body', array('status' => 400));
+            }
+
+            // Prevent replay attacks by checking nonce
+            $used_nonces = get_transient('breez_used_webhook_nonces') ?: array();
+            if (in_array($nonce, $used_nonces)) {
+                self::$logger->log('Webhook validation failed: Nonce already used', 'error');
+                return new WP_Error('invalid_webhook', 'Nonce already used', array('status' => 401));
+            }
+
+            // Calculate expected signature
+            $payload = $timestamp . $nonce . $body;
+            $expected_signature = hash_hmac('sha256', $payload, $webhook_secret);
+
+            // Verify signature
+            if (!hash_equals($expected_signature, $signature)) {
+                self::$logger->log('Webhook validation failed: Invalid signature', 'error');
+                return new WP_Error('invalid_webhook', 'Invalid signature', array('status' => 401));
+            }
+
+            // Store nonce to prevent replay attacks (expire after 24 hours)
+            $used_nonces[] = $nonce;
+            set_transient('breez_used_webhook_nonces', array_slice($used_nonces, -1000), DAY_IN_SECONDS);
+
+            self::$logger->log('Webhook validation successful', 'debug');
+            return true;
+
+        } catch (Exception $e) {
+            self::$logger->log('Webhook validation error: ' . $e->getMessage(), 'error');
+            return new WP_Error('webhook_error', $e->getMessage(), array('status' => 500));
+        }
     }
     
     /**

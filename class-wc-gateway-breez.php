@@ -1,6 +1,6 @@
 <?php
 /**
- * Breez Nodeless Payments
+ * Breez Payment Gateway
  *
  * @package Breez_WooCommerce
  */
@@ -10,7 +10,7 @@ if (!defined('ABSPATH')) {
 }
 
 /**
- * Breez Nodeless Payments
+ * Breez Payment Gateway
  *
  * Provides a Bitcoin & Lightning Payment Gateway for WooCommerce.
  *
@@ -97,6 +97,13 @@ class WC_Gateway_Breez extends WC_Payment_Gateway {
             add_action('admin_notices', array($this, 'admin_api_notice'));
         }
         
+        // Check webhook secret
+        $webhook_secret = $this->get_option('webhook_secret');
+        if ($this->enabled === 'yes' && empty($webhook_secret)) {
+            $this->logger->log('Webhook secret not configured', 'warning');
+            add_action('admin_notices', array($this, 'admin_webhook_secret_notice'));
+        }
+        
         // Initialize client, DB manager, payment handler
         try {
             $this->client = new Breez_API_Client(
@@ -156,7 +163,7 @@ class WC_Gateway_Breez extends WC_Payment_Gateway {
      */
     public function admin_api_notice() {
         echo '<div class="error"><p>' .
-             __('Breez Nodeless Payments requires API URL and API Key to be configured. Please configure these in the gateway settings.', 'breez-woocommerce') .
+             __('Breez Payment Gateway requires API URL and API Key to be configured. Please configure these in the gateway settings.', 'breez-woocommerce') .
              '</p></div>';
     }
     
@@ -165,7 +172,16 @@ class WC_Gateway_Breez extends WC_Payment_Gateway {
      */
     public function admin_payment_methods_notice() {
         echo '<div class="error"><p>' .
-             __('Breez Nodeless Payments requires at least one payment method to be selected. Please configure payment methods in the gateway settings.', 'breez-woocommerce') .
+             __('Breez Payment Gateway requires at least one payment method to be selected. Please configure payment methods in the gateway settings.', 'breez-woocommerce') .
+             '</p></div>';
+    }
+    
+    /**
+     * Display admin notice for missing webhook secret
+     */
+    public function admin_webhook_secret_notice() {
+        echo '<div class="notice notice-warning is-dismissible"><p>' .
+             __('Breez Payment Gateway: Please configure a webhook secret in the gateway settings to secure your webhook endpoint.', 'breez-woocommerce') .
              '</p></div>';
     }
     
@@ -174,7 +190,7 @@ class WC_Gateway_Breez extends WC_Payment_Gateway {
      */
     public function admin_api_error_notice() {
         echo '<div class="error"><p>' .
-             __('Breez Nodeless Payments encountered an error during initialization. Please check the logs for more details.', 'breez-woocommerce') .
+             __('Breez Payment Gateway encountered an error during initialization. Please check the logs for more details.', 'breez-woocommerce') .
              '</p></div>';
     }
     

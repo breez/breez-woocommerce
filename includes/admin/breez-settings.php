@@ -56,6 +56,13 @@ return array(
         'default'     => '',
         'desc_tip'    => true,
     ),
+    'webhook_secret' => array(
+        'title'       => __('Webhook Secret', 'breez-woocommerce'),
+        'type'        => 'password',
+        'description' => __('Enter a secret key that will be used to validate webhook requests. This should be a random string of at least 32 characters.', 'breez-woocommerce'),
+        'default'     => '',
+        'desc_tip'    => true,
+    ),
     'payment_options' => array(
         'title'       => __('Payment Options', 'breez-woocommerce'),
         'type'        => 'title',
