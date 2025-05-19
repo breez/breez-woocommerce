@@ -1,0 +1,34 @@
+#WordPress configuration file and its template file
+wp-config.php
+wp-config-sample.php
+
+#Apache / PHP server configuration files
+/.htaccess
+.user.ini
+php.ini
+
+#Error log files
+*.log
+error_log
+
+#Dynamic files and directories
+/wp-content/cache/
+/wp-content/*-cache.php
+/wp-content/languages/
+/wp-content/uploads/
+/wp-content/upgrade/
+/wp-content/ewww/
+/wp-content/db.php
+/wp-content/autoptimize_404_handler.php
+/wp-content/wp-cloudflare-super-page-cache/
+
+#Filesystem leftover files
+.DS_Store
+Thumbs.db
+
+# Composer
+composer.lock
+composer.phar
+/vendor/
+
+

@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  wordpress-tests:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - .:/var/www/html/wp-content/plugins/breez-woocommerce
+    environment:
+      - WP_TESTS_DB_NAME=wordpress_test
+      - WP_TESTS_DB_USER=wordpress
+      - WP_TESTS_DB_PASSWORD=wordpress
+      - WP_TESTS_DB_HOST=mysql-tests
+      - WP_VERSION=latest
+      - WP_TESTS_DIR=/tmp/wordpress-tests-lib
+      - WP_CORE_DIR=/tmp/wordpress
+    depends_on:
+      mysql-tests:
+        condition: service_healthy
+    command: >
+      bash -c "
+        git config --global --add safe.directory /var/www/html/wp-content/plugins/breez-woocommerce &&
+        composer install &&
+        chmod +x tests/bin/install-wp-tests.sh &&
+        tests/bin/install-wp-tests.sh ${WP_TESTS_DB_NAME} ${WP_TESTS_DB_USER} ${WP_TESTS_DB_PASSWORD} ${WP_TESTS_DB_HOST} ${WP_VERSION} true &&
+        composer test
+      "
+
+  mysql-tests:
+    image: mysql:5.7
+    environment:
+      - MYSQL_DATABASE=wordpress_test
+      - MYSQL_USER=wordpress
+      - MYSQL_PASSWORD=wordpress
+      - MYSQL_ROOT_PASSWORD=wordpress
+    ports:
+      - "3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "wordpress", "-pwordpress"]
+      interval: 5s
+      timeout: 5s
+      retries: 10 
