@@ -24,6 +24,17 @@ define('BREEZ_WC_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('BREEZ_WC_PLUGIN_URL', plugin_dir_url(__FILE__));
 
 /**
+ * Register custom cron schedule for every 5 minutes
+ */
+add_filter('cron_schedules', function(array $schedules): array {
+    $schedules['five_minutes'] = [
+        'interval' => 5 * MINUTE_IN_SECONDS,
+        'display'  => __('Every 5 Minutes'),
+    ];
+    return $schedules;
+});
+
+/**
  * Display notice if WooCommerce is not installed
  */
 function breez_wc_woocommerce_missing_notice() {
