@@ -56,8 +56,8 @@ class WC_Gateway_Breez extends WC_Payment_Gateway {
         $this->id                 = 'breez';
         $this->icon               = apply_filters('woocommerce_breez_icon', '');
         $this->has_fields         = false;
-        $this->method_title       = __('Breez NodeLess Payments', 'breez-woocommerce');
-        $this->method_description = __('Accept Lightning payments with Breez Nodeless SDK', 'breez-woocommerce');
+        $this->method_title       = __('Lightning Payments', 'breez-woocommerce');
+        $this->method_description = __('Pay with Lightning', 'breez-woocommerce');
         $this->supports           = array(
             'products',
             'refunds'

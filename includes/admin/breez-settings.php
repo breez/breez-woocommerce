@@ -34,7 +34,7 @@ return array(
         'title'       => __('Instructions', 'breez-woocommerce'),
         'type'        => 'textarea',
         'description' => __('Instructions that will be added to the thank you page and emails.', 'breez-woocommerce'),
-        'default'     => __('Scan the QR code or copy the invoice/address to complete your payment.', 'breez-woocommerce'),
+        'default'     => __('Pay this invoice with a Lightning wallet to complete your payment.', 'breez-woocommerce'),
         'desc_tip'    => true,
     ),
     'api_settings' => array(
