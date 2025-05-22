@@ -565,7 +565,7 @@ function breez_register_blocks_scripts() {
         [
             'breez' => [
                 'title' => !empty($settings['title']) ? $settings['title'] : 'Breez Nodeless Payments',
-                'description' => !empty($settings['description']) ? $settings['description'] : 'Pay with Bitcoin via Lightning Network or on-chain transaction.',
+                'description' => !empty($settings['description']) ? $settings['description'] : 'Pay with Lightning',
                 'supports' => ['products'],
                 'showSavedCards' => false,
                 'canMakePayment' => true,

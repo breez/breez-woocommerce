@@ -212,6 +212,18 @@ class Breez_Payment_Handler {
     
     /**
      * Check payment status
+     * 
+     * Payment states from SDK are mapped to WooCommerce states as follows:
+     * - SUCCEEDED -> completed (claim tx confirmed)
+     * - WAITING_CONFIRMATION -> completed (claim tx broadcast but not confirmed)
+     * - PENDING -> pending (lockup tx broadcast)
+     * - WAITING_FEE_ACCEPTANCE -> pending (needs fee approval)
+     * - FAILED -> failed (expired or lockup tx failed)
+     * - UNKNOWN -> pending (not found or error)
+     *
+     * Note: WAITING_CONFIRMATION is considered completed because the claim transaction
+     * has been broadcast or a direct Liquid transaction has been seen, making the
+     * payment effectively irreversible at this point.
      *
      * @param string $invoice_id Invoice ID
      * @return string Payment status (pending, completed, failed)
@@ -228,20 +240,30 @@ class Breez_Payment_Handler {
             // First check the local database
             $payment = $this->db_manager->get_payment_by_invoice($invoice_id);
             
-            if ($payment && $payment['status'] !== 'pending') {
-                $this->logger->log('Using cached payment status', 'debug', array(
+            if ($payment && $payment['status'] === 'completed') {
+                $this->logger->log('Using cached completed payment status', 'debug', array(
                     'invoice_id' => $invoice_id,
                     'status' => $payment['status']
                 ));
-                return $payment['status']; // Return cached status if not pending
+                return $payment['status']; // Only return cached status if completed
             }
             
+            // Check with API
+            $response = $this->client->check_payment_status($invoice_id);
+            $status = $response['status'];
             
-            // If pending or not found, check with API
-            $status = $this->client->check_payment_status($invoice_id);
-            
+            // Log detailed payment state information
+            $this->logger->log('Payment status details', 'debug', array(
+                'invoice_id' => $invoice_id,
+                'status' => $status,
+                'sdk_status' => $response['payment_details']['status'] ?? 'unknown',
+                'amount_sat' => $response['amount_sat'],
+                'timestamp' => $response['timestamp'],
+                'error' => $response['error']
+            ));
+
             // Update database if status has changed and we have payment data
-            if ($payment && $status !== 'pending' && $status !== $payment['status']) {
+            if ($payment && $status !== $payment['status']) {
                 $this->db_manager->update_payment_status($payment['order_id'], $status);
                 
                 $this->logger->log('Payment status updated', 'info', array(
@@ -250,6 +272,13 @@ class Breez_Payment_Handler {
                     'new_status' => $status,
                     'order_id' => $payment['order_id']
                 ));
+
+                // Process status changes
+                if ($status === 'completed') {
+                    $this->process_successful_payment($invoice_id);
+                } else if ($status === 'failed') {
+                    $this->process_failed_payment($invoice_id);
+                }
             }
             
             $duration = round(microtime(true) - $start_time, 3);

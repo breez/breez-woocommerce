@@ -108,7 +108,7 @@ class Breez_API_Client {
     /**
      * Check payment status using API endpoint
      *
-     * @param string $invoice_id Invoice ID or payment destination
+     * @param string $invoice_id Invoice ID or payment identifier
      * @return array Payment status response
      */
     public function check_payment_status($invoice_id) {
@@ -126,23 +126,98 @@ class Breez_API_Client {
             ));
 
             // If the payment is not found, return pending instead of throwing an error
-            if (isset($response['error']) && $response['error'] === 'Payment not found') {
+            if ($response['status'] === 'UNKNOWN') {
                 return array(
                     'status' => 'pending',
-                    'destination' => $invoice_id
+                    'destination' => $invoice_id,
+                    'sdk_status' => 'UNKNOWN'
                 );
             }
 
-            // Return the response as is
-            return $response;
+            // Map SDK payment states to WooCommerce states
+            $status = $this->map_payment_status($response['status']);
+
+            // Build response with all available details
+            $result = array(
+                'status' => $status,
+                'sdk_status' => $response['status'], // Include original SDK status
+                'destination' => $invoice_id,
+                'amount_sat' => $response['amount_sat'] ?? null,
+                'fees_sat' => $response['fees_sat'] ?? null,
+                'timestamp' => $response['timestamp'] ?? null,
+                'error' => $response['error'] ?? null
+            );
+
+            // Include payment details if available
+            if (isset($response['payment_details'])) {
+                $result['payment_details'] = $response['payment_details'];
+            }
+
+            // Add human-readable status description
+            $result['status_description'] = $this->get_status_description($response['status']);
+
+            return $result;
 
         } catch (Exception $e) {
             $this->logger->log('Payment status check error: ' . $e->getMessage(), 'error');
             // Return pending status instead of throwing an error
             return array(
                 'status' => 'pending',
-                'destination' => $invoice_id
+                'sdk_status' => 'UNKNOWN',
+                'destination' => $invoice_id,
+                'error' => $e->getMessage()
             );
+        }
+    }
+    
+    /**
+     * Map SDK payment states to WooCommerce payment states
+     *
+     * @param string $sdk_status The status from the SDK
+     * @return string WooCommerce payment status
+     */
+    private function map_payment_status($sdk_status) {
+        switch ($sdk_status) {
+            case 'SUCCEEDED':
+            case 'WAITING_CONFIRMATION': // Consider payment complete when claim tx is broadcast
+                return 'completed';
+                
+            case 'PENDING': // Lockup transaction broadcast
+                return 'pending';
+                
+            case 'WAITING_FEE_ACCEPTANCE': // Needs fee approval
+                return 'pending';
+                
+            case 'FAILED': // Swap failed (expired or lockup tx failed)
+                return 'failed';
+                
+            case 'UNKNOWN': // Payment not found or error
+            default:
+                return 'pending';
+        }
+    }
+    
+    /**
+     * Get human-readable status description
+     *
+     * @param string $sdk_status The SDK status
+     * @return string Human-readable description
+     */
+    private function get_status_description($sdk_status) {
+        switch ($sdk_status) {
+            case 'SUCCEEDED':
+                return __('Payment confirmed and completed.', 'breez-woocommerce');
+            case 'WAITING_CONFIRMATION':
+                return __('Payment received and being confirmed.', 'breez-woocommerce');
+            case 'PENDING':
+                return __('Payment initiated, waiting for completion.', 'breez-woocommerce');
+            case 'WAITING_FEE_ACCEPTANCE':
+                return __('Waiting for fee approval.', 'breez-woocommerce');
+            case 'FAILED':
+                return __('Payment failed or expired.', 'breez-woocommerce');
+            case 'UNKNOWN':
+            default:
+                return __('Payment status unknown.', 'breez-woocommerce');
         }
     }
     

@@ -18,7 +18,7 @@
                 return window.wp.element.createElement(
                     'div',
                     null,
-                    window.breezSettings?.description || 'Pay with Bitcoin via Lightning Network or on-chain transaction.'
+                    window.breezSettings?.description || 'Pay with Lightning.'
                 );
             };
 

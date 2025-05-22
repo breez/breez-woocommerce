@@ -13,17 +13,31 @@
 
 .breez-payment-status {
     padding: 15px;
-    border-radius: 5px;
-    margin-bottom: 20px;
+    margin: 10px 0;
+    border-radius: 4px;
+    text-align: center;
+}
+
+.breez-payment-pending,
+.breez-payment-confirming,
+.breez-payment-unknown {
+    background-color: #f8f9fa;
+    border: 1px solid #e9ecef;
+    padding: 15px;
+    margin: 10px 0;
+    border-radius: 4px;
+    text-align: center;
 }
 
 .breez-payment-completed {
-    background: #d4edda;
+    background-color: #d4edda;
+    border: 1px solid #c3e6cb;
     color: #155724;
 }
 
 .breez-payment-failed {
-    background: #f8d7da;
+    background-color: #f8d7da;
+    border: 1px solid #f5c6cb;
     color: #721c24;
 }
 
@@ -88,4 +102,62 @@
     padding: 15px;
     border-radius: 5px;
     margin-bottom: 20px;
+}
+
+.breez-payment-details {
+    margin-top: 15px;
+    padding: 10px;
+    background-color: rgba(255, 255, 255, 0.5);
+    border-radius: 4px;
+}
+
+.breez-error-details {
+    font-family: monospace;
+    background-color: rgba(0, 0, 0, 0.05);
+    padding: 10px;
+    margin-top: 10px;
+    border-radius: 4px;
+}
+
+/* Loading Spinner */
+.breez-spinner {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    margin: 10px auto;
+    border: 3px solid #f3f3f3;
+    border-top: 3px solid #3498db;
+    border-radius: 50%;
+    animation: breez-spin 1s linear infinite;
+}
+
+@keyframes breez-spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Status Icons */
+.breez-payment-status::before {
+    font-family: dashicons;
+    font-size: 24px;
+    display: block;
+    margin-bottom: 10px;
+}
+
+.breez-payment-completed::before {
+    content: "\f147"; /* Dashicon: yes */
+    color: #155724;
+}
+
+.breez-payment-failed::before {
+    content: "\f335"; /* Dashicon: no */
+    color: #721c24;
+}
+
+.breez-payment-pending::before,
+.breez-payment-confirming::before,
+.breez-payment-unknown::before {
+    content: "\f463"; /* Dashicon: update */
+    color: #856404;
+    animation: breez-spin 2s linear infinite;
 }

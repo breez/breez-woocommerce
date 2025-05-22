@@ -14,7 +14,7 @@ const BreezLabel = () => {
 };
 
 const BreezComponent = () => {
-    const description = window.wcSettings?.breez?.description || 'Pay with Bitcoin via Lightning Network or on-chain transaction.';
+    const description = window.wcSettings?.breez?.description || 'Pay with Lightning';
     return createElement('div', { className: 'wc-block-components-payment-method-description' },
         decodeEntities(description)
     );

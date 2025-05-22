@@ -181,25 +181,46 @@ document.addEventListener('DOMContentLoaded', function() {
             // Clear any existing error message
             statusIndicator.classList.remove('breez-payment-error');
             
-            // If status is pending, don't show any status message
-            if (paymentData.status === 'pending') {
+            // Update status message based on SDK status
+            if (paymentData.sdk_status === 'PENDING' || paymentData.sdk_status === 'WAITING_FEE_ACCEPTANCE') {
+                statusIndicator.innerHTML = `
+                    <div class="breez-payment-pending">
+                        <p>${paymentData.status_description || '<?php _e('Payment is being processed...', 'breez-woocommerce'); ?>'}</p>
+                        <div class="breez-spinner"></div>
+                    </div>
+                `;
                 return;
             }
             
-            if (paymentData.status === 'SUCCEEDED' || (data.status && data.status === 'SUCCEEDED')) {
+            if (paymentData.sdk_status === 'WAITING_CONFIRMATION') {
+                statusIndicator.innerHTML = `
+                    <div class="breez-payment-confirming">
+                        <p>${paymentData.status_description || '<?php _e('Payment received! Waiting for confirmation...', 'breez-woocommerce'); ?>'}</p>
+                        <div class="breez-spinner"></div>
+                    </div>
+                `;
+                return;
+            }
+            
+            if (paymentData.sdk_status === 'SUCCEEDED') {
                 // Stop checking status immediately
                 clearInterval(statusCheckInterval);
                 
-                // Update UI to show payment completed
+                // Format amounts with commas for better readability
+                const amountSats = paymentData.amount_sat ? Number(paymentData.amount_sat).toLocaleString() : '0';
+                const feesSats = paymentData.fees_sat ? Number(paymentData.fees_sat).toLocaleString() : '0';
+                
+                // Update UI to show payment completed with amount details
                 paymentBox.innerHTML = `
                     <h3><?php _e('Bitcoin/Lightning Payment', 'breez-woocommerce'); ?></h3>
                     <div class="breez-payment-status breez-payment-completed">
-                        <p><?php _e('Payment received! Thank you for your payment.', 'breez-woocommerce'); ?></p>
+                        <p>${paymentData.status_description || '<?php _e('Payment confirmed! Thank you for your payment.', 'breez-woocommerce'); ?>'}</p>
                         <p><?php _e('Your order is now being processed.', 'breez-woocommerce'); ?></p>
-                        <p class="breez-payment-details">
-                            <?php _e('Amount paid:', 'breez-woocommerce'); ?> ${Number(paymentData.amount_sat).toLocaleString()} sats<br>
-                            <?php _e('Network fee:', 'breez-woocommerce'); ?> ${Number(paymentData.fees_sat).toLocaleString()} sats
-                        </p>
+                        <div class="breez-payment-details">
+                            <p><strong><?php _e('Payment Details:', 'breez-woocommerce'); ?></strong></p>
+                            <p><?php _e('Amount paid:', 'breez-woocommerce'); ?> ${amountSats} sats</p>
+                            <p><?php _e('Network fee:', 'breez-woocommerce'); ?> ${feesSats} sats</p>
+                        </div>
                     </div>
                 `;
                 
@@ -211,29 +232,32 @@ document.addEventListener('DOMContentLoaded', function() {
                     clearInterval(statusCheckInterval);
                     statusCheckInterval = null;
                 }
-            } else if (paymentData.status === 'FAILED' || (data.status && data.status === 'FAILED')) {
+                return;
+            }
+            
+            if (paymentData.sdk_status === 'FAILED') {
                 // Stop checking status immediately
                 clearInterval(statusCheckInterval);
                 
-                // Update UI to show payment failed
+                // Show error message
                 paymentBox.innerHTML = `
                     <h3><?php _e('Bitcoin/Lightning Payment', 'breez-woocommerce'); ?></h3>
                     <div class="breez-payment-status breez-payment-failed">
-                        <p><?php _e('Payment failed.', 'breez-woocommerce'); ?></p>
-                        <p><?php _e('Please try again or contact us for assistance.', 'breez-woocommerce'); ?></p>
-                        ${paymentData.error ? `<p class="breez-error-details">${paymentData.error}</p>` : ''}
+                        <p>${paymentData.status_description || '<?php _e('Payment failed or expired.', 'breez-woocommerce'); ?>'}</p>
+                        <p>${paymentData.error || ''}</p>
+                        <p><?php _e('Please try again or contact support if the problem persists.', 'breez-woocommerce'); ?></p>
                     </div>
                 `;
-                
-                // Notify WordPress about the failed payment
-                notifyServer(paymentData);
-                
-                // Double check interval is cleared
-                if (statusCheckInterval) {
-                    clearInterval(statusCheckInterval);
-                    statusCheckInterval = null;
-                }
+                return;
             }
+            
+            // For unknown status, show generic message
+            statusIndicator.innerHTML = `
+                <div class="breez-payment-unknown">
+                    <p>${paymentData.status_description || '<?php _e('Checking payment status...', 'breez-woocommerce'); ?>'}</p>
+                    <div class="breez-spinner"></div>
+                </div>
+            `;
         })
         .catch(error => {
             console.error('Error checking payment status:', error);

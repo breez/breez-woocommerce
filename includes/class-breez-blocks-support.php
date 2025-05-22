@@ -137,7 +137,7 @@ class Breez_Blocks_Support extends Automattic\WooCommerce\Blocks\Payments\Integr
     public function get_payment_method_data() {
         $data = [
             'title' => !empty($this->settings['title']) ? $this->settings['title'] : 'Breez Nodeless Payments',
-            'description' => !empty($this->settings['description']) ? $this->settings['description'] : 'Pay with Bitcoin via Lightning Network or on-chain transaction.',
+            'description' => !empty($this->settings['description']) ? $this->settings['description'] : 'Pay with Lightning',
             'supports' => ['products'],
             'showSavedCards' => false,
             'canMakePayment' => true,
