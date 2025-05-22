@@ -128,19 +128,16 @@ class Breez_API_Client {
             // If the payment is not found, return pending instead of throwing an error
             if ($response['status'] === 'UNKNOWN') {
                 return array(
-                    'status' => 'pending',
+                    'status' => 'PENDING',
                     'destination' => $invoice_id,
                     'sdk_status' => 'UNKNOWN'
                 );
             }
 
-            // Map SDK payment states to WooCommerce states
-            $status = $this->map_payment_status($response['status']);
-
-            // Build response with all available details
+            // Build response with all available details - keep original SDK status
             $result = array(
-                'status' => $status,
-                'sdk_status' => $response['status'], // Include original SDK status
+                'status' => $response['status'], // Keep original SDK status (SUCCEEDED, WAITING_CONFIRMATION, etc)
+                'sdk_status' => $response['status'],
                 'destination' => $invoice_id,
                 'amount_sat' => $response['amount_sat'] ?? null,
                 'fees_sat' => $response['fees_sat'] ?? null,
@@ -162,7 +159,7 @@ class Breez_API_Client {
             $this->logger->log('Payment status check error: ' . $e->getMessage(), 'error');
             // Return pending status instead of throwing an error
             return array(
-                'status' => 'pending',
+                'status' => 'PENDING',
                 'sdk_status' => 'UNKNOWN',
                 'destination' => $invoice_id,
                 'error' => $e->getMessage()

@@ -114,6 +114,10 @@ function breez_wc_init() {
             require_once $full_path;
         }
         
+        // Add hooks for payment instructions on order received page
+        add_action('woocommerce_thankyou_breez', 'breez_wc_thankyou_payment_instructions', 10);
+        add_action('woocommerce_order_details_after_order_table', 'breez_wc_order_received_payment_instructions', 10);
+        
         // Verify WooCommerce settings
         if (!get_option('woocommerce_currency')) {
             throw new Exception('WooCommerce currency not configured');
@@ -682,31 +686,67 @@ function breez_wc_filter_blocks_checkout_order_data($order, $request) {
 }
 
 /**
- * Display payment instructions on the payment page
+ * Display payment instructions on the thank you page
  */
-function breez_wc_display_payment_instructions() {
-    if (!isset($_GET['show_payment']) || !isset($_GET['order_id'])) {
-        return;
-    }
-    
-    $order_id = absint($_GET['order_id']);
+function breez_wc_thankyou_payment_instructions($order_id) {
     $order = wc_get_order($order_id);
     
-    if (!$order || $order->get_payment_method() !== 'breez') {
+    if (!$order || $order->get_payment_method() !== 'breez' || $order->has_status('processing')) {
         return;
     }
     
-    // Verify order key
-    if (!isset($_GET['key']) || $_GET['key'] !== $order->get_order_key()) {
+    // Get payment details from database
+    $db_manager = new Breez_DB_Manager();
+    $payment = $db_manager->get_payment_by_order($order_id);
+    
+    if (!$payment) {
         return;
     }
     
-    // Get gateway instance
-    $gateways = WC()->payment_gateways->payment_gateways();
-    $gateway = isset($gateways['breez']) ? $gateways['breez'] : null;
-    
-    if ($gateway) {
-        $gateway->payment_page($order_id);
-    }
+    // Load the payment instructions template
+    wc_get_template(
+        'payment-instructions.php',
+        array(
+            'order' => $order,
+            'invoice_id' => $payment['invoice_id'],
+            'payment_method' => $payment['metadata']['payment_method'],
+            'expiry' => $payment['metadata']['expires_at'],
+            'current_time' => time(),
+            'payment_status' => $payment['status']
+        ),
+        '',
+        BREEZ_WC_PLUGIN_DIR . 'templates/'
+    );
 }
-add_action('woocommerce_receipt_breez', 'breez_wc_display_payment_instructions');
+
+/**
+ * Display payment instructions on the order received page
+ */
+function breez_wc_order_received_payment_instructions($order) {
+    if (!$order || $order->get_payment_method() !== 'breez' || $order->has_status('processing')) {
+        return;
+    }
+    
+    // Get payment details from database
+    $db_manager = new Breez_DB_Manager();
+    $payment = $db_manager->get_payment_by_order($order->get_id());
+    
+    if (!$payment) {
+        return;
+    }
+    
+    // Load the payment instructions template
+    wc_get_template(
+        'payment-instructions.php',
+        array(
+            'order' => $order,
+            'invoice_id' => $payment['invoice_id'],
+            'payment_method' => $payment['metadata']['payment_method'],
+            'expiry' => $payment['metadata']['expires_at'],
+            'current_time' => time(),
+            'payment_status' => $payment['status']
+        ),
+        '',
+        BREEZ_WC_PLUGIN_DIR . 'templates/'
+    );
+}

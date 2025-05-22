@@ -39,444 +39,317 @@ if ($payment_method === 'LIGHTNING' && strpos($qr_data, 'lightning:') !== 0 && s
 ?>
 
 <div class="breez-payment-box">
-    <h3><?php _e('Bitcoin/Lightning Payment', 'breez-woocommerce'); ?></h3>
-    
-    <?php if ($payment_status === 'completed'): ?>
+    <?php if ($payment_status === 'SUCCEEDED' || $payment_status === 'WAITING_CONFIRMATION'): ?>
         <div class="breez-payment-status breez-payment-completed">
             <p><?php _e('Payment received! Thank you for your payment.', 'breez-woocommerce'); ?></p>
             <p><?php _e('Your order is now being processed.', 'breez-woocommerce'); ?></p>
         </div>
-    <?php elseif ($payment_status === 'failed'): ?>
+    <?php elseif ($payment_status === 'FAILED'): ?>
         <div class="breez-payment-status breez-payment-failed">
             <p><?php _e('Payment failed or expired.', 'breez-woocommerce'); ?></p>
             <p><?php _e('Please contact us for assistance.', 'breez-woocommerce'); ?></p>
         </div>
     <?php else: ?>
-        <?php if ($time_left > 0): ?>
-            <div class="breez-payment-countdown" data-expiry="<?php echo esc_attr($expiry); ?>">
-                <p><?php _e('Time remaining: ', 'breez-woocommerce'); ?><span class="breez-countdown"><?php printf('%02d:%02d', $minutes_left, $seconds_left); ?></span></p>
-            </div>
+        <div class="breez-payment-instructions">
+            <h3><?php _e('Complete Your Payment', 'breez-woocommerce'); ?></h3>
+            <p><?php echo esc_html(get_option('woocommerce_breez_instructions')); ?></p>
             
-            <div class="breez-payment-qr" id="breez-qr-container" data-qr-data="<?php echo esc_attr($qr_data); ?>">
-                <div class="breez-qr-loading">
-                    <div class="breez-spinner"></div>
-                    <p><?php _e('Generating QR Code...', 'breez-woocommerce'); ?></p>
-                </div>
-            </div>
-            
-            <div class="breez-payment-details">
-                <p><strong><?php _e('Invoice/Address:', 'breez-woocommerce'); ?></strong></p>
-                <div class="breez-invoice-container">
-                    <textarea readonly class="breez-invoice-text" rows="4"><?php echo esc_html($invoice_id); ?></textarea>
-                    <button class="breez-copy-button" data-clipboard-text="<?php echo esc_attr($invoice_id); ?>">
-                        <?php _e('Copy', 'breez-woocommerce'); ?>
-                    </button>
+            <?php if ($time_left > 0): ?>
+                <div class="breez-payment-countdown" data-expiry="<?php echo esc_attr($expiry); ?>">
+                    <p><?php _e('Time remaining: ', 'breez-woocommerce'); ?><span class="breez-countdown"><?php printf('%02d:%02d', $minutes_left, $seconds_left); ?></span></p>
                 </div>
                 
-                <p class="breez-payment-info">
-                    <?php echo esc_html(get_option('woocommerce_breez_instructions')); ?>
-                </p>
-            </div>
-        <?php else: ?>
-            <div class="breez-payment-expired">
-                <p><?php _e('Payment time expired. Please contact support or place a new order.', 'breez-woocommerce'); ?></p>
-            </div>
-        <?php endif; ?>
+                <div class="breez-payment-qr" id="breez-qr-container" data-qr-data="<?php echo esc_attr($qr_data); ?>">
+                    <div class="breez-qr-loading">
+                        <div class="breez-spinner"></div>
+                        <p><?php _e('Generating QR Code...', 'breez-woocommerce'); ?></p>
+                    </div>
+                </div>
+                
+                <div class="breez-payment-details">
+                    <p><strong><?php _e('Invoice/Address:', 'breez-woocommerce'); ?></strong></p>
+                    <div class="breez-invoice-container">
+                        <textarea readonly class="breez-invoice-text" rows="4"><?php echo esc_html($invoice_id); ?></textarea>
+                        <button class="breez-copy-button" data-clipboard-text="<?php echo esc_attr($invoice_id); ?>">
+                            <?php _e('Copy', 'breez-woocommerce'); ?>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="breez-payment-status" id="breez-payment-status">
+                    <div class="breez-payment-pending">
+                        <p><?php _e('Waiting for payment...', 'breez-woocommerce'); ?></p>
+                        <div class="breez-spinner"></div>
+                    </div>
+                </div>
+            <?php else: ?>
+                <div class="breez-payment-expired">
+                    <p><?php _e('Payment time expired. Please contact support or place a new order.', 'breez-woocommerce'); ?></p>
+                </div>
+            <?php endif; ?>
+        </div>
     <?php endif; ?>
 </div>
 
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    // QR Code generation
-    var qrContainer = document.getElementById('breez-qr-container');
-    if (qrContainer) {
-        var qrData = qrContainer.getAttribute('data-qr-data');
-        generateQRCode(qrData);
+// QR Code generation
+var qrContainer = document.getElementById('breez-qr-container');
+if (qrContainer) {
+    var qrData = qrContainer.getAttribute('data-qr-data');
+    if (qrData) {
+        var qrScript = document.createElement('script');
+        qrScript.src = 'https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js';
+        qrScript.onload = function() {
+            var qr = qrcode(0, 'M');
+            qr.addData(qrData);
+            qr.make();
+            qrContainer.innerHTML = qr.createImgTag(5);
+        };
+        document.head.appendChild(qrScript);
     }
+}
 
-    // Get API configuration
-    var apiUrl = '<?php echo esc_js(get_option('woocommerce_breez_api_url')); ?>';
-    var apiKey = '<?php echo esc_js(get_option('woocommerce_breez_api_key')); ?>';
-    var invoiceId = '<?php echo esc_js($invoice_id); ?>';
+// Countdown timer
+var countdownEl = document.querySelector('.breez-countdown');
+var expiryTime = document.querySelector('.breez-payment-countdown')?.getAttribute('data-expiry');
 
-    // Ensure API URL ends with a slash
-    apiUrl = apiUrl.replace(/\/?$/, '/');
-
-    // Countdown functionality
-    var countdownEl = document.querySelector('.breez-countdown');
-    var expiryTime = parseInt(document.querySelector('.breez-payment-countdown')?.dataset.expiry, 10);
-    
-    if (countdownEl && expiryTime) {
-        var countdownInterval = setInterval(function() {
-            var now = Math.floor(Date.now() / 1000);
-            var timeLeft = expiryTime - now;
-            
-            if (timeLeft <= 0) {
-                clearInterval(countdownInterval);
-                clearInterval(statusCheckInterval); // Also clear status check
-                document.querySelector('.breez-payment-countdown').innerHTML = '<p><?php _e('Payment time expired.', 'breez-woocommerce'); ?></p>';
-                document.querySelector('.breez-payment-qr').style.opacity = '0.3';
-                
-                // Show expired message
-                var paymentBox = document.querySelector('.breez-payment-box');
-                if (paymentBox) {
-                    paymentBox.innerHTML = `
-                        <h3><?php _e('Bitcoin/Lightning Payment', 'breez-woocommerce'); ?></h3>
-                        <div class="breez-payment-expired">
-                            <p><?php _e('Payment time expired. Please contact support or place a new order.', 'breez-woocommerce'); ?></p>
-                        </div>
-                    `;
-                }
-                return;
-            }
-            
-            var minutes = Math.floor(timeLeft / 60);
-            var seconds = timeLeft % 60;
-            countdownEl.textContent = (minutes < 10 ? '0' : '') + minutes + ':' + (seconds < 10 ? '0' : '') + seconds;
-        }, 1000);
-    }
-
-    // Payment status check functionality
-    function checkPaymentStatus() {
-        var paymentBox = document.querySelector('.breez-payment-box');
+if (countdownEl && expiryTime) {
+    var countdownInterval = setInterval(function() {
+        var now = Math.floor(Date.now() / 1000);
+        var timeLeft = expiryTime - now;
         
-        // Stop checking if payment box doesn't exist
-        if (!paymentBox) {
+        if (timeLeft <= 0) {
+            clearInterval(countdownInterval);
             clearInterval(statusCheckInterval);
+            document.querySelector('.breez-payment-countdown').innerHTML = '<p><?php _e('Payment time expired.', 'breez-woocommerce'); ?></p>';
+            document.querySelector('.breez-payment-qr').style.opacity = '0.3';
+            
+            // Show expired message
+            var paymentBox = document.querySelector('.breez-payment-box');
+            if (paymentBox) {
+                paymentBox.innerHTML = `
+                    <div class="breez-payment-expired">
+                        <p><?php _e('Payment time expired. Please contact support or place a new order.', 'breez-woocommerce'); ?></p>
+                    </div>
+                `;
+            }
             return;
         }
-
-        // Stop checking if payment is already completed or failed
-        if (paymentBox.querySelector('.breez-payment-completed') || 
-            paymentBox.querySelector('.breez-payment-failed') || 
-            paymentBox.querySelector('.breez-payment-expired')) {
-            clearInterval(statusCheckInterval);
-            return;
-        }
-
-        // Show loading indicator
-        var statusIndicator = paymentBox.querySelector('.breez-payment-status');
-        if (!statusIndicator) {
-            statusIndicator = document.createElement('div');
-            statusIndicator.className = 'breez-payment-status';
-            paymentBox.appendChild(statusIndicator);
-        }
         
-        // Use WordPress REST API endpoint instead of direct Breez API call
-        fetch('/wp-json/breez-wc/v1/check-payment-status/' + invoiceId, {
-            headers: {
-                'Accept': 'application/json'
-            }
-        })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error('Network response error: ' + response.status);
-            }
-            return response.json();
-        })
-        .then(data => {
-            // Use the 'data' property from our API wrapper
-            const paymentData = data.data || data;
-            
-            // Clear any existing error message
-            statusIndicator.classList.remove('breez-payment-error');
-            
-            // Update status message based on SDK status
-            if (paymentData.sdk_status === 'PENDING' || paymentData.sdk_status === 'WAITING_FEE_ACCEPTANCE') {
-                statusIndicator.innerHTML = `
-                    <div class="breez-payment-pending">
-                        <p>${paymentData.status_description || '<?php _e('Payment is being processed...', 'breez-woocommerce'); ?>'}</p>
-                        <div class="breez-spinner"></div>
-                    </div>
-                `;
-                return;
-            }
-            
-            if (paymentData.sdk_status === 'WAITING_CONFIRMATION') {
-                statusIndicator.innerHTML = `
-                    <div class="breez-payment-confirming">
-                        <p>${paymentData.status_description || '<?php _e('Payment received! Waiting for confirmation...', 'breez-woocommerce'); ?>'}</p>
-                        <div class="breez-spinner"></div>
-                    </div>
-                `;
-                return;
-            }
-            
-            if (paymentData.sdk_status === 'SUCCEEDED') {
-                // Stop checking status immediately
-                clearInterval(statusCheckInterval);
-                
-                // Format amounts with commas for better readability
-                const amountSats = paymentData.amount_sat ? Number(paymentData.amount_sat).toLocaleString() : '0';
-                const feesSats = paymentData.fees_sat ? Number(paymentData.fees_sat).toLocaleString() : '0';
-                
-                // Update UI to show payment completed with amount details
-                paymentBox.innerHTML = `
-                    <h3><?php _e('Bitcoin/Lightning Payment', 'breez-woocommerce'); ?></h3>
-                    <div class="breez-payment-status breez-payment-completed">
-                        <p>${paymentData.status_description || '<?php _e('Payment confirmed! Thank you for your payment.', 'breez-woocommerce'); ?>'}</p>
-                        <p><?php _e('Your order is now being processed.', 'breez-woocommerce'); ?></p>
-                    </div>
-                `;
-                
-                // Notify WordPress about the completed payment
-                notifyServer(paymentData);
-                
-                // Double check interval is cleared
-                if (statusCheckInterval) {
-                    clearInterval(statusCheckInterval);
-                    statusCheckInterval = null;
-                }
-                return;
-            }
-            
-            if (paymentData.sdk_status === 'FAILED') {
-                // Stop checking status immediately
-                clearInterval(statusCheckInterval);
-                
-                // Show error message
-                paymentBox.innerHTML = `
-                    <h3><?php _e('Bitcoin/Lightning Payment', 'breez-woocommerce'); ?></h3>
-                    <div class="breez-payment-status breez-payment-failed">
-                        <p>${paymentData.status_description || '<?php _e('Payment failed or expired.', 'breez-woocommerce'); ?>'}</p>
-                        <p>${paymentData.error || ''}</p>
-                        <p><?php _e('Please try again or contact support if the problem persists.', 'breez-woocommerce'); ?></p>
-                    </div>
-                `;
-                return;
-            }
-            
-            // For unknown status, show generic message
-            statusIndicator.innerHTML = `
-                <div class="breez-payment-unknown">
-                    <p>${paymentData.status_description || '<?php _e('Checking payment status...', 'breez-woocommerce'); ?>'}</p>
+        var minutes = Math.floor(timeLeft / 60);
+        var seconds = timeLeft % 60;
+        countdownEl.textContent = (minutes < 10 ? '0' : '') + minutes + ':' + (seconds < 10 ? '0' : '') + seconds;
+    }, 1000);
+}
+
+// Payment status check
+var invoiceId = '<?php echo esc_js($invoice_id); ?>';
+var orderId = '<?php echo esc_js($order->get_id()); ?>';
+
+function checkPaymentStatus() {
+    fetch('/wp-json/breez-wc/v1/check-payment-status/' + invoiceId, {
+        headers: {
+            'Accept': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        var paymentData = data.data || data;
+        var statusContainer = document.getElementById('breez-payment-status');
+        
+        if (!statusContainer) return;
+        
+        if (paymentData.status === 'SUCCEEDED' || paymentData.status === 'WAITING_CONFIRMATION') {
+            clearInterval(statusCheckInterval);
+            statusContainer.innerHTML = `
+                <div class="breez-payment-completed">
+                    <p><?php _e('Payment received! Thank you for your payment.', 'breez-woocommerce'); ?></p>
+                    <p><?php _e('Your order is now being processed.', 'breez-woocommerce'); ?></p>
+                </div>
+            `;
+            // Reload page after successful payment
+            setTimeout(() => window.location.reload(), 2000);
+        } else if (paymentData.status === 'FAILED') {
+            clearInterval(statusCheckInterval);
+            statusContainer.innerHTML = `
+                <div class="breez-payment-failed">
+                    <p><?php _e('Payment failed or expired.', 'breez-woocommerce'); ?></p>
+                    <p><?php _e('Please try again or contact support if the problem persists.', 'breez-woocommerce'); ?></p>
+                </div>
+            `;
+        } else {
+            // For PENDING or any other status
+            statusContainer.innerHTML = `
+                <div class="breez-payment-pending">
+                    <p><?php _e('Waiting for payment...', 'breez-woocommerce'); ?></p>
                     <div class="breez-spinner"></div>
                 </div>
             `;
-        })
-        .catch(error => {
-            console.error('Error checking payment status:', error);
-            // Don't show error message for status check failures
-            // Just log to console and continue checking
-        });
-    }
+        }
+    })
+    .catch(error => console.error('Error checking payment status:', error));
+}
 
-    // Function to notify WordPress about payment status changes
-    function notifyServer(paymentData) {
-        fetch('/wp-json/breez-wc/v1/check-payment-status?order_id=<?php echo esc_js($order->get_id()); ?>', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-WP-Nonce': '<?php echo esc_js(wp_create_nonce('wp_rest')); ?>'
-            },
-            body: JSON.stringify(paymentData)
-        })
-        .catch(error => console.error('Error notifying server:', error));
-    }
+// Check payment status every 5 seconds
+var statusCheckInterval = setInterval(checkPaymentStatus, 5000);
 
-    // Check payment status every 5 seconds
-    var statusCheckInterval = setInterval(checkPaymentStatus, 5000);
-    
-    // Do an initial check immediately
-    checkPaymentStatus();
+// Initial check
+checkPaymentStatus();
 
-    // Copy invoice button functionality
-    var copyButton = document.querySelector('.breez-copy-button');
-    if (copyButton) {
-        copyButton.addEventListener('click', function() {
-            var textToCopy = this.dataset.clipboardText;
-            var textarea = document.createElement('textarea');
-            textarea.value = textToCopy;
-            document.body.appendChild(textarea);
-            textarea.select();
-            
-            try {
-                document.execCommand('copy');
-                this.textContent = '<?php _e('Copied!', 'breez-woocommerce'); ?>';
-                setTimeout(function() {
-                    copyButton.textContent = '<?php _e('Copy', 'breez-woocommerce'); ?>';
-                }, 2000);
-            } catch (err) {
-                console.error('Failed to copy: ', err);
-            }
-            
-            document.body.removeChild(textarea);
-        });
-    }
-
-    // QR Code generation function
-    function generateQRCode(data) {
-        // Try QRServer.com first
-        var primaryUrl = 'https://api.qrserver.com/v1/create-qr-code/?' + new URLSearchParams({
-            data: data,
-            size: '300x300',
-            margin: '10',
-            format: 'svg',
-            qzone: '1',
-            color: '000000',
-            bgcolor: 'FFFFFF'
-        }).toString();
-
-        // Fallback URL (Google Charts)
-        var fallbackUrl = 'https://chart.googleapis.com/chart?' + new URLSearchParams({
-            chs: '300x300',
-            cht: 'qr',
-            chl: data,
-            choe: 'UTF-8',
-            chld: 'M|4'
-        }).toString();
-
-        // Create image element
-        var img = new Image();
-        img.style.cssText = 'display:block; max-width:300px; height:auto;';
-        img.alt = 'QR Code';
-
-        // Try primary service first
-        img.onerror = function() {
-            // If primary fails, try fallback
-            img.src = fallbackUrl;
-        };
-
-        img.onload = function() {
-            qrContainer.innerHTML = '';
-            var wrapper = document.createElement('div');
-            wrapper.className = 'breez-qr-wrapper';
-            wrapper.style.cssText = 'background:white; padding:15px; border-radius:8px; box-shadow:0 2px 4px rgba(0,0,0,0.1); display:inline-block;';
-            wrapper.appendChild(img);
-            qrContainer.appendChild(wrapper);
-        };
-
-        // Start loading primary QR code
-        img.src = primaryUrl;
-    }
-});
+// Copy invoice functionality
+var copyButton = document.querySelector('.breez-copy-button');
+if (copyButton) {
+    copyButton.addEventListener('click', function() {
+        var textToCopy = this.dataset.clipboardText;
+        var textarea = document.createElement('textarea');
+        textarea.value = textToCopy;
+        document.body.appendChild(textarea);
+        textarea.select();
+        
+        try {
+            document.execCommand('copy');
+            this.textContent = '<?php _e('Copied!', 'breez-woocommerce'); ?>';
+            setTimeout(() => {
+                this.textContent = '<?php _e('Copy', 'breez-woocommerce'); ?>';
+            }, 2000);
+        } catch (err) {
+            console.error('Failed to copy:', err);
+        }
+        
+        document.body.removeChild(textarea);
+    });
+}
 </script>
 
 <style>
-    .breez-payment-box {
-        max-width: 600px;
-        margin: 0 auto;
-        padding: 20px;
-        background: #f8f8f8;
-        border-radius: 5px;
-        text-align: center;
-    }
-    
-    .breez-payment-status {
-        padding: 15px;
-        border-radius: 5px;
-        margin-bottom: 20px;
-    }
-    
-    .breez-payment-completed {
-        background: #d4edda;
-        color: #155724;
-    }
-    
-    .breez-payment-failed {
-        background: #f8d7da;
-        color: #721c24;
-    }
-    
-    .breez-payment-countdown {
-        font-size: 18px;
-        margin-bottom: 20px;
-    }
-    
-    .breez-countdown {
-        font-weight: bold;
-    }
-    
-    .breez-payment-qr {
-        margin-bottom: 20px;
-        display: flex;
-        justify-content: center;
-    }
+.breez-payment-box {
+    max-width: 600px;
+    margin: 2em auto;
+    padding: 20px;
+    background: #f8f8f8;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
 
-    .breez-qr-loading {
-        text-align: center;
-        padding: 20px;
-    }
+.breez-payment-instructions {
+    text-align: center;
+}
 
-    .breez-spinner {
-        display: inline-block;
-        width: 40px;
-        height: 40px;
-        border: 4px solid #f3f3f3;
-        border-top: 4px solid #3498db;
-        border-radius: 50%;
-        animation: spin 1s linear infinite;
-        margin-bottom: 10px;
-    }
+.breez-payment-instructions h3 {
+    margin-bottom: 1em;
+    color: #333;
+}
 
-    @keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
-    }
-    
-    .breez-invoice-container {
-        position: relative;
-        margin-bottom: 20px;
-    }
-    
-    .breez-invoice-text {
-        width: 100%;
-        padding: 10px;
-        font-family: monospace;
-        font-size: 14px;
-        resize: none;
-        border: 1px solid #ddd;
-        border-radius: 4px;
-    }
-    
-    .breez-copy-button {
-        position: absolute;
-        right: 10px;
-        top: 10px;
-        padding: 5px 10px;
-        background: #0073aa;
-        color: white;
-        border: none;
-        border-radius: 3px;
-        cursor: pointer;
-    }
-    
-    .breez-copy-button:hover {
-        background: #005177;
-    }
-    
-    .breez-payment-info {
-        margin-bottom: 20px;
-    }
-    
-    .breez-payment-expired {
-        background: #f8d7da;
-        color: #721c24;
-        padding: 15px;
-        border-radius: 5px;
-        margin-bottom: 20px;
-    }
-    
-    .breez-payment-error {
-        background: #fff3cd;
-        color: #856404;
-        padding: 10px;
-        margin: 10px 0;
-        border-radius: 4px;
-        border: 1px solid #ffeeba;
-    }
-    
-    .breez-error-details {
-        font-size: 0.9em;
-        margin-top: 5px;
-        color: #721c24;
-    }
-    
-    .breez-payment-details {
-        font-size: 0.9em;
-        margin-top: 15px;
-        padding: 10px;
-        background: rgba(0, 0, 0, 0.05);
-        border-radius: 4px;
-    }
+.breez-payment-status {
+    padding: 15px;
+    margin: 10px 0;
+    border-radius: 4px;
+    text-align: center;
+}
+
+.breez-payment-completed {
+    background-color: #d4edda;
+    border: 1px solid #c3e6cb;
+    color: #155724;
+}
+
+.breez-payment-failed {
+    background-color: #f8d7da;
+    border: 1px solid #f5c6cb;
+    color: #721c24;
+}
+
+.breez-payment-countdown {
+    font-size: 18px;
+    margin: 1em 0;
+    color: #666;
+}
+
+.breez-countdown {
+    font-weight: bold;
+    color: #333;
+}
+
+.breez-payment-qr {
+    margin: 2em auto;
+    max-width: 300px;
+}
+
+.breez-payment-qr img {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    margin: 0 auto;
+}
+
+.breez-invoice-container {
+    position: relative;
+    margin: 1em auto;
+    max-width: 500px;
+}
+
+.breez-invoice-text {
+    width: 100%;
+    padding: 10px 40px 10px 10px;
+    font-family: monospace;
+    font-size: 14px;
+    resize: none;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background: #fff;
+}
+
+.breez-copy-button {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    padding: 5px 10px;
+    background: #0073aa;
+    color: white;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.breez-copy-button:hover {
+    background: #005177;
+}
+
+.breez-spinner {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 2px solid #f3f3f3;
+    border-top: 2px solid #3498db;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 0 10px;
+    vertical-align: middle;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.breez-payment-pending,
+.breez-payment-confirming {
+    background-color: #fff3cd;
+    border: 1px solid #ffeeba;
+    color: #856404;
+    padding: 15px;
+    margin: 1em 0;
+    border-radius: 4px;
+}
+
+.breez-payment-expired {
+    background-color: #f8d7da;
+    border: 1px solid #f5c6cb;
+    color: #721c24;
+    padding: 15px;
+    margin: 1em 0;
+    border-radius: 4px;
+}
 </style>

@@ -254,100 +254,79 @@ class WC_Gateway_Breez extends WC_Payment_Gateway {
      */
     protected function get_available_payment_methods() {
         if (empty($this->payment_methods)) {
-            return ['lightning']; // Default to lightning if nothing is set
+            return ['LIGHTNING']; // Default to LIGHTNING if nothing is set
         }
         
         if (is_array($this->payment_methods)) {
-            return array_filter(array_map('trim', $this->payment_methods));
+            return array_map(function($method) {
+                return strtoupper(trim($method));
+            }, $this->payment_methods);
         }
         
-        return array_filter(array_map('trim', explode(',', $this->payment_methods)));
+        return array_map(function($method) {
+            return strtoupper(trim($method));
+        }, explode(',', $this->payment_methods));
     }
     
     /**
-     * Process the payment and return the result
+     * Process the payment
      *
      * @param int $order_id
      * @return array
      */
     public function process_payment($order_id) {
         try {
-            $this->logger->log("Processing payment for order #$order_id", 'debug');
-            
             $order = wc_get_order($order_id);
             if (!$order) {
                 throw new Exception(__('Order not found', 'breez-woocommerce'));
             }
-
-            // Check for existing payment in database
-            $existing_payment = $this->db_manager->get_payment_by_order($order_id);
-            $current_time = time();
-
-            if ($existing_payment && $existing_payment['status'] === 'pending') {
-                $payment_created = strtotime($existing_payment['created_at']);
-                $expiry_time = $payment_created + ($this->expiry_minutes * 60);
-                
-                if ($current_time < $expiry_time) {
-                    $this->logger->log("Using existing valid payment for order #$order_id", 'debug');
-                    return array(
-                        'result' => 'success',
-                        'redirect' => $this->get_return_url($order)
-                    );
-                }
-            }
-
-            // Get the selected payment method
+            
+            $this->logger->log("Processing payment for order #$order_id", 'debug');
+            
+            // Get payment method from request
             $payment_method = $this->get_payment_method_from_request();
             
-            // Check for blocks payment data in order meta
-            $blocks_payment_data = $order->get_meta('_breez_blocks_payment_data');
-            if (!$payment_method && $blocks_payment_data) {
-                $this->logger->log("Found blocks payment data in order meta", 'debug');
-                $data = is_string($blocks_payment_data) ? json_decode($blocks_payment_data, true) : $blocks_payment_data;
-                if (is_array($data) && isset($data['breez_payment_method'])) {
-                    $payment_method = sanitize_text_field($data['breez_payment_method']);
-                    $this->logger->log("Using payment method from blocks data: $payment_method", 'debug');
-                }
-            }
-            
-            if (!$payment_method) {
-                throw new Exception(__('No payment method selected', 'breez-woocommerce'));
-            }
-            $this->logger->log("Selected payment method: $payment_method", 'debug');
-            
-            // Validate payment method
-            $available_methods = $this->get_available_payment_methods();
-            if (!in_array($payment_method, $available_methods)) {
-                throw new Exception(__('Invalid payment method', 'breez-woocommerce'));
-            }
-            
-            // Get the order total and convert to satoshis
+            // Get order details
             $order_total = $order->get_total();
             $currency = $order->get_currency();
             
-            // Get exchange rate and convert to satoshis
+            // Get exchange rate
             $exchange_rate_response = $this->client->request('GET', "/exchange_rates/{$currency}");
+            $this->logger->log("Exchange rate response: " . print_r($exchange_rate_response, true), 'debug');
+            
             if (!$exchange_rate_response || !isset($exchange_rate_response['rate'])) {
                 throw new Exception(__('Failed to get exchange rate', 'breez-woocommerce'));
             }
             
+            // Calculate amount in satoshis
+            // The exchange rate is in fiat/BTC, so we need to:
+            // 1. Convert order total to BTC by dividing by the rate
+            // 2. Convert BTC to satoshis
             $btc_amount = $order_total / $exchange_rate_response['rate'];
-            $amount_sat = (int)($btc_amount * 100000000); // Convert BTC to sats
+            $amount_sat = (int)round($btc_amount * 100000000);
             
-            $this->logger->log("Order total: {$order_total} {$currency}, Amount in sats: {$amount_sat}", 'debug');
-            
-            if ($amount_sat <= 0) {
-                throw new Exception(__('Invalid amount conversion', 'breez-woocommerce'));
+            // Validate amount is within reasonable range (1000 to 100000000 sats)
+            if ($amount_sat < 1000 || $amount_sat > 100000000) {
+                throw new Exception(sprintf(
+                    __('Invalid payment amount calculated: %d sats. Please check exchange rate calculation.', 'breez-woocommerce'),
+                    $amount_sat
+                ));
             }
             
-            // Create payment request
+            $this->logger->log("Exchange rate calculation:", 'debug');
+            $this->logger->log("Order total ({$currency}): {$order_total}", 'debug');
+            $this->logger->log("Exchange rate ({$currency}/BTC): {$exchange_rate_response['rate']}", 'debug');
+            $this->logger->log("BTC amount: {$btc_amount}", 'debug');
+            $this->logger->log("Final amount (sats): {$amount_sat}", 'debug');
+            
+            // Prepare payment data
             $payment_data = array(
                 'amount' => $amount_sat,
-                'method' => $payment_method === 'onchain' ? 'BITCOIN_ADDRESS' : 'LIGHTNING',
-                'description' => sprintf(__('Payment for order #%s', 'breez-woocommerce'), $order->get_order_number())
+                'method' => $payment_method,
+                'description' => sprintf(__('Order #%s', 'breez-woocommerce'), $order->get_order_number()),
+                'source' => 'woocommerce'
             );
             
-            // Log the payment data being sent
             $this->logger->log("Creating payment with data: " . print_r($payment_data, true), 'debug');
             
             // Create the payment
@@ -402,21 +381,14 @@ class WC_Gateway_Breez extends WC_Payment_Gateway {
                 // Empty cart
                 WC()->cart->empty_cart();
                 
-                // Return success with redirect to payment instructions page
-                $redirect_url = add_query_arg(
-                    array(
-                        'order_id' => $order->get_id(),
-                        'key' => $order->get_order_key(),
-                        'show_payment' => true
-                    ),
-                    $order->get_checkout_payment_url(true)
-                );
+                // Store payment URL in order meta
+                $order->update_meta_data('_breez_payment_url', $response['destination']);
+                $order->save();
                 
-                $this->logger->log("Redirecting to payment page: $redirect_url", 'debug');
-                
+                // Return success and redirect to order received page
                 return array(
                     'result' => 'success',
-                    'redirect' => $redirect_url
+                    'redirect' => $order->get_checkout_order_received_url()
                 );
                 
             } catch (Exception $e) {
@@ -438,7 +410,7 @@ class WC_Gateway_Breez extends WC_Payment_Gateway {
     public function get_payment_method_from_request() {
         // Priority 1: Direct POST parameter for breez_payment_method (from blocks)
         if (isset($_POST['breez_payment_method'])) {
-            $method = sanitize_text_field($_POST['breez_payment_method']);
+            $method = strtoupper(sanitize_text_field($_POST['breez_payment_method']));
             $this->logger->log("Payment method found in direct POST: $method", 'debug');
             return $method;
         }
@@ -462,7 +434,7 @@ class WC_Gateway_Breez extends WC_Payment_Gateway {
                 
                 // Extract payment method
                 if (is_array($raw_data) && isset($raw_data['breez_payment_method'])) {
-                    $method = sanitize_text_field($raw_data['breez_payment_method']);
+                    $method = strtoupper(sanitize_text_field($raw_data['breez_payment_method']));
                     $this->logger->log("Payment method found in payment_data: $method", 'debug');
                     return $method;
                 }
@@ -473,7 +445,7 @@ class WC_Gateway_Breez extends WC_Payment_Gateway {
         if (isset($_POST['wc-breez-payment-data'])) {
             $blocks_data = json_decode(wp_unslash($_POST['wc-breez-payment-data']), true);
             if (is_array($blocks_data) && isset($blocks_data['breez_payment_method'])) {
-                $method = sanitize_text_field($blocks_data['breez_payment_method']);
+                $method = strtoupper(sanitize_text_field($blocks_data['breez_payment_method']));
                 $this->logger->log("Payment method found in blocks data: $method", 'debug');
                 return $method;
             }
@@ -481,7 +453,7 @@ class WC_Gateway_Breez extends WC_Payment_Gateway {
         
         // Default fallback
         $available_methods = $this->get_available_payment_methods();
-        $default_method = reset($available_methods); // Get first available method
+        $default_method = strtoupper(reset($available_methods)); // Get first available method
         $this->logger->log("Using default payment method: $default_method", 'debug');
         return $default_method;
     }
@@ -531,17 +503,18 @@ class WC_Gateway_Breez extends WC_Payment_Gateway {
             return;
         }
         
-        // Check current payment status
-        $payment_status = 'pending';
+        // Check current payment status (API status is in UPPERCASE)
+        $api_payment_status = 'PENDING';
         try {
-            $payment_status = $this->client->check_payment_status($invoice_id);
-            $this->logger->log("Current payment status for order #$order_id: $payment_status", 'debug');
+            $status_response = $this->client->check_payment_status($invoice_id);
+            $api_payment_status = $status_response['status'];
+            $this->logger->log("Current API payment status for order #$order_id: $api_payment_status", 'debug');
         } catch (Exception $e) {
             $this->logger->log("Error checking payment status: " . $e->getMessage(), 'error');
         }
         
-        // Update order status if needed
-        if ($payment_status === 'SUCCEEDED' && $order->get_status() === 'pending') {
+        // Update order status if needed (WooCommerce status is in lowercase)
+        if (($api_payment_status === 'SUCCEEDED' || $api_payment_status === 'WAITING_CONFIRMATION') && $order->get_status() === 'pending') {
             $order->payment_complete();
             $order->add_order_note(__('Payment confirmed via Breez API.', 'breez-woocommerce'));
             $this->logger->log("Payment for order #$order_id confirmed via API check", 'debug');
@@ -565,7 +538,7 @@ class WC_Gateway_Breez extends WC_Payment_Gateway {
                 'payment_method' => $payment_method,
                 'expiry' => $expiry,
                 'current_time' => $current_time,
-                'payment_status' => $payment_status
+                'payment_status' => $api_payment_status
             ),
             '',
             BREEZ_WC_PLUGIN_DIR . 'templates/'
@@ -662,12 +635,12 @@ class WC_Gateway_Breez extends WC_Payment_Gateway {
         
         // Check exchange rate
         try {
-            $rate = $this->payment_handler->get_btc_rate();
-            if (!$rate) {
+            $rate_response = $this->client->request('GET', '/exchange_rates/USD');
+            if (!$rate_response || !isset($rate_response['rate'])) {
                 $this->logger->log("Unable to get exchange rate", 'error');
                 return false;
             }
-            $this->logger->log("Exchange rate: $rate", 'debug');
+            $this->logger->log("Exchange rate: " . $rate_response['rate'], 'debug');
         } catch (Exception $e) {
             $this->logger->log("Exchange rate error: " . $e->getMessage(), 'error');
             return false;
