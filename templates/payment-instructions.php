@@ -216,11 +216,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     <div class="breez-payment-status breez-payment-completed">
                         <p>${paymentData.status_description || '<?php _e('Payment confirmed! Thank you for your payment.', 'breez-woocommerce'); ?>'}</p>
                         <p><?php _e('Your order is now being processed.', 'breez-woocommerce'); ?></p>
-                        <div class="breez-payment-details">
-                            <p><strong><?php _e('Payment Details:', 'breez-woocommerce'); ?></strong></p>
-                            <p><?php _e('Amount paid:', 'breez-woocommerce'); ?> ${amountSats} sats</p>
-                            <p><?php _e('Network fee:', 'breez-woocommerce'); ?> ${feesSats} sats</p>
-                        </div>
                     </div>
                 `;
                 

@@ -165,20 +165,33 @@ class Breez_Webhook_Handler {
             ), 404);
         }
         
-        $payment_handler = new Breez_Payment_Handler(null, $db_manager);
+        // Update payment status in database
+        $db_manager->update_payment_status($order_id, $status);
         
-        // Update payment status based on the webhook data
+        // Update order status based on payment status
         if ($status === 'SUCCEEDED') {
-            $payment_handler->process_successful_payment($invoice_id);
-        } elseif ($status === 'FAILED') {
-            $payment_handler->process_failed_payment($invoice_id);
-        } else {
-            self::$logger->log("Unknown payment status: $status");
+            if ($order->get_status() === 'pending') {
+                // Complete the order
+                $order->payment_complete($invoice_id);
+                $order->add_order_note(sprintf(
+                    __('Payment confirmed. Amount: %d sats, Hash: %s', 'breez-woocommerce'),
+                    $payment['metadata']['amount_sat'],
+                    $invoice_id
+                ));
+                $order->save();
+                
+                self::$logger->log("Order #$order_id marked as complete", 'info');
+            }
+        } else if ($status === 'FAILED') {
+            if ($order->get_status() === 'pending') {
+                $order->update_status('failed', __('Payment failed or expired.', 'breez-woocommerce'));
+                self::$logger->log("Order #$order_id marked as failed", 'info');
+            }
         }
         
         return new WP_REST_Response(array(
             'success' => true,
-            'message' => 'Webhook processed successfully'
+            'status' => $status
         ), 200);
     }
 }

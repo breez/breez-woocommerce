@@ -360,8 +360,16 @@ class Breez_Payment_Handler {
         
         // Update order status if still pending
         if ($order->has_status('pending')) {
+            // Clear the payment data to allow new payment creation
+            $order->delete_meta_data('_breez_payment_id');
+            $order->delete_meta_data('_breez_invoice_id');
+            $order->delete_meta_data('_breez_payment_expires');
+            
             $order->update_status('failed', __('Payment failed or expired.', 'breez-woocommerce'));
             $this->logger->log("Payment failed for order #$order_id (invoice: $invoice_id)");
+            
+            // Save the order
+            $order->save();
         }
         
         return true;

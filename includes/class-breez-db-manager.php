@@ -54,7 +54,7 @@ public function install_tables() {
     $sql = "CREATE TABLE IF NOT EXISTS {$table_name} (
         id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
         order_id BIGINT UNSIGNED NOT NULL,
-        invoice_id VARCHAR(255) NOT NULL,
+        invoice_id TEXT NOT NULL,
         amount DECIMAL(16,8) NOT NULL,
         currency VARCHAR(10) NOT NULL,
         status VARCHAR(20) NOT NULL,
@@ -62,8 +62,8 @@ public function install_tables() {
         updated_at DATETIME NOT NULL,
         metadata TEXT,
         PRIMARY KEY (id),
-        UNIQUE KEY order_id (order_id),
-        KEY invoice_id (invoice_id)
+        KEY order_id (order_id),
+        KEY invoice_id (invoice_id(255))
     ) $charset_collate;";
     
     $this->logger->log("SQL query: {$sql}", 'debug');
@@ -102,30 +102,55 @@ public function install_tables() {
         $now = current_time('mysql');
         
         try {
+            // Log input parameters
+            $this->logger->log("Attempting to save payment with parameters:", 'debug');
+            $this->logger->log("order_id: $order_id", 'debug');
+            $this->logger->log("invoice_id: $invoice_id", 'debug');
+            $this->logger->log("amount: $amount", 'debug');
+            $this->logger->log("currency: $currency", 'debug');
+            $this->logger->log("status: $status", 'debug');
+            $this->logger->log("metadata: " . print_r($metadata, true), 'debug');
+            
+            // Verify table exists
+            $table_exists = $wpdb->get_var("SHOW TABLES LIKE '{$this->table_name}'") === $this->table_name;
+            if (!$table_exists) {
+                $this->logger->log("Table {$this->table_name} does not exist!", 'error');
+                return false;
+            }
+            
+            // Prepare data for insert
+            $data = array(
+                'order_id' => $order_id,
+                'invoice_id' => $invoice_id,
+                'amount' => $amount,
+                'currency' => $currency,
+                'status' => $status,
+                'created_at' => $now,
+                'updated_at' => $now,
+                'metadata' => $metadata ? json_encode($metadata) : null
+            );
+            
+            // Log the SQL query that will be executed
+            $this->logger->log("Inserting with data: " . print_r($data, true), 'debug');
+            
             $result = $wpdb->insert(
                 $this->table_name,
-                array(
-                    'order_id' => $order_id,
-                    'invoice_id' => $invoice_id,
-                    'amount' => $amount,
-                    'currency' => $currency,
-                    'status' => $status,
-                    'created_at' => $now,
-                    'updated_at' => $now,
-                    'metadata' => $metadata ? json_encode($metadata) : null
-                ),
+                $data,
                 array('%d', '%s', '%f', '%s', '%s', '%s', '%s', '%s')
             );
             
-            if ($result) {
-                $this->logger->log("Payment saved: order_id=$order_id, invoice_id=$invoice_id, status=$status");
-                return true;
-            } else {
-                $this->logger->log("Error saving payment: " . $wpdb->last_error);
+            if ($result === false) {
+                $this->logger->log("Database error: " . $wpdb->last_error, 'error');
+                $this->logger->log("Last query: " . $wpdb->last_query, 'debug');
                 return false;
             }
+            
+            $this->logger->log("Payment saved successfully: order_id=$order_id, invoice_id=$invoice_id, status=$status");
+            return true;
+            
         } catch (Exception $e) {
-            $this->logger->log("Exception saving payment: " . $e->getMessage());
+            $this->logger->log("Exception saving payment: " . $e->getMessage(), 'error');
+            $this->logger->log("Stack trace: " . $e->getTraceAsString(), 'debug');
             return false;
         }
     }
@@ -257,5 +282,22 @@ public function install_tables() {
             $this->logger->log("Exception getting pending payments: " . $e->getMessage());
             return array();
         }
+    }
+    
+    /**
+     * Drop and recreate the payments table
+     * This is needed when changing the table schema
+     */
+    public function recreate_table() {
+        global $wpdb;
+        
+        $this->logger->log("Dropping and recreating payments table", 'info');
+        
+        // Drop the existing table
+        $table_name = $wpdb->prefix . 'wc_breez_payments';
+        $wpdb->query("DROP TABLE IF EXISTS {$table_name}");
+        
+        // Create the table with new schema
+        $this->install_tables();
     }
 }

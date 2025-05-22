@@ -271,14 +271,31 @@ class WC_Gateway_Breez extends WC_Payment_Gateway {
      * @return array
      */
     public function process_payment($order_id) {
-        $this->logger->log("Processing payment for order #$order_id", 'debug');
-        
         try {
+            $this->logger->log("Processing payment for order #$order_id", 'debug');
+            
             $order = wc_get_order($order_id);
             if (!$order) {
                 throw new Exception(__('Order not found', 'breez-woocommerce'));
             }
-            
+
+            // Check for existing payment in database
+            $existing_payment = $this->db_manager->get_payment_by_order($order_id);
+            $current_time = time();
+
+            if ($existing_payment && $existing_payment['status'] === 'pending') {
+                $payment_created = strtotime($existing_payment['created_at']);
+                $expiry_time = $payment_created + ($this->expiry_minutes * 60);
+                
+                if ($current_time < $expiry_time) {
+                    $this->logger->log("Using existing valid payment for order #$order_id", 'debug');
+                    return array(
+                        'result' => 'success',
+                        'redirect' => $this->get_return_url($order)
+                    );
+                }
+            }
+
             // Get the selected payment method
             $payment_method = $this->get_payment_method_from_request();
             
@@ -323,9 +340,9 @@ class WC_Gateway_Breez extends WC_Payment_Gateway {
                 throw new Exception(__('Invalid amount conversion', 'breez-woocommerce'));
             }
             
-            // Create payment
+            // Create payment request
             $payment_data = array(
-                'amount' => $amount_sat, // Send amount in satoshis
+                'amount' => $amount_sat,
                 'method' => $payment_method === 'onchain' ? 'BITCOIN_ADDRESS' : 'LIGHTNING',
                 'description' => sprintf(__('Payment for order #%s', 'breez-woocommerce'), $order->get_order_number())
             );
@@ -342,16 +359,26 @@ class WC_Gateway_Breez extends WC_Payment_Gateway {
                     throw new Exception(__('Failed to create payment', 'breez-woocommerce'));
                 }
                 
-                // Save payment data to order meta
-                $order->update_meta_data('_breez_payment_id', $response['destination']);
-                $order->update_meta_data('_breez_invoice_id', $response['destination']);
-                $order->update_meta_data('_breez_payment_method', $payment_method);
-                $order->update_meta_data('_breez_payment_amount', $order_total);
-                $order->update_meta_data('_breez_payment_amount_sat', $amount_sat);
-                $order->update_meta_data('_breez_payment_currency', $currency);
-                $order->update_meta_data('_breez_payment_status', 'pending');
-                $order->update_meta_data('_breez_payment_created', time());
-                $order->update_meta_data('_breez_payment_expires', time() + ($this->expiry_minutes * 60));
+                // Save payment in database
+                $metadata = array(
+                    'payment_method' => $payment_method,
+                    'exchange_rate' => $exchange_rate_response['rate'],
+                    'amount_sat' => $amount_sat,
+                    'expires_at' => time() + ($this->expiry_minutes * 60)
+                );
+                
+                $saved = $this->db_manager->save_payment(
+                    $order_id,
+                    $response['destination'],
+                    $order_total,
+                    $currency,
+                    'pending',
+                    $metadata
+                );
+                
+                if (!$saved) {
+                    throw new Exception(__('Failed to save payment in database', 'breez-woocommerce'));
+                }
                 
                 // Set order status to pending
                 $order->update_status('pending', __('Awaiting Bitcoin/Lightning payment', 'breez-woocommerce'));
@@ -367,7 +394,7 @@ class WC_Gateway_Breez extends WC_Payment_Gateway {
                 
                 // Save the order
                 $order->save();
-                $this->logger->log("Order meta data updated for #$order_id", 'debug');
+                $this->logger->log("Payment saved for order #$order_id", 'debug');
                 
                 // Reduce stock levels
                 wc_reduce_stock_levels($order_id);
@@ -375,13 +402,21 @@ class WC_Gateway_Breez extends WC_Payment_Gateway {
                 // Empty cart
                 WC()->cart->empty_cart();
                 
-                // Return success with redirect to order-received page
-                $return_url = $this->get_return_url($order);
-                $this->logger->log("Redirecting to: $return_url", 'debug');
+                // Return success with redirect to payment instructions page
+                $redirect_url = add_query_arg(
+                    array(
+                        'order_id' => $order->get_id(),
+                        'key' => $order->get_order_key(),
+                        'show_payment' => true
+                    ),
+                    $order->get_checkout_payment_url(true)
+                );
+                
+                $this->logger->log("Redirecting to payment page: $redirect_url", 'debug');
                 
                 return array(
                     'result' => 'success',
-                    'redirect' => $return_url
+                    'redirect' => $redirect_url
                 );
                 
             } catch (Exception $e) {
@@ -703,6 +738,41 @@ class WC_Gateway_Breez extends WC_Payment_Gateway {
             'result' => 'failure',
             'redirect' => '',
             'message' => $message ? $message : __('An error occurred during the payment process.', 'breez-woocommerce'),
+        );
+    }
+
+    /**
+     * Display payment instructions on the payment page
+     */
+    public function payment_page($order_id) {
+        $this->logger->log("Displaying payment page for order #$order_id", 'debug');
+        
+        $order = wc_get_order($order_id);
+        if (!$order) {
+            $this->logger->log("Order not found: #$order_id", 'error');
+            return;
+        }
+        
+        // Get payment details from database
+        $payment = $this->db_manager->get_payment_by_order($order_id);
+        if (!$payment) {
+            $this->logger->log("Payment not found for order #$order_id", 'error');
+            return;
+        }
+        
+        // Load the payment instructions template
+        wc_get_template(
+            'payment-instructions.php',
+            array(
+                'order' => $order,
+                'invoice_id' => $payment['invoice_id'],
+                'payment_method' => $payment['metadata']['payment_method'],
+                'expiry' => $payment['metadata']['expires_at'],
+                'current_time' => time(),
+                'payment_status' => $payment['status']
+            ),
+            '',
+            BREEZ_WC_PLUGIN_DIR . 'templates/'
         );
     }
 }
