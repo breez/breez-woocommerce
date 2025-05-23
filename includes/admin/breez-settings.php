@@ -20,14 +20,14 @@ return array(
         'title'       => __('Title', 'breez-woocommerce'),
         'type'        => 'text',
         'description' => __('This controls the title which the user sees during checkout.', 'breez-woocommerce'),
-        'default'     => __('Lightning Payments', 'breez-woocommerce'),
+        'default'     => __('Pay with Lightning', 'breez-woocommerce'),
         'desc_tip'    => true,
     ),
     'description' => array(
         'title'       => __('Description', 'breez-woocommerce'),
         'type'        => 'textarea',
         'description' => __('This controls the description which the user sees during checkout.', 'breez-woocommerce'),
-        'default'     => __('Pay with Lightning', 'breez-woocommerce'),
+        'default'     => __('', 'breez-woocommerce'),
         'desc_tip'    => true,
     ),
     'instructions' => array(

@@ -9,12 +9,12 @@ const { PaymentMethodLabel, PaymentMethodIcon } = window.wc.blocksComponents || 
 
 const BreezLabel = () => {
     return createElement('div', { className: 'wc-block-components-payment-method-label' },
-        createElement('span', {}, window.wcSettings?.breez?.title || 'Breez Nodeless Payments')
+        createElement('span', {}, window.wcSettings?.breez?.title || '')
     );
 };
 
 const BreezComponent = () => {
-    const description = window.wcSettings?.breez?.description || 'Pay with Lightning';
+    const description = window.wcSettings?.breez?.description || '';
     return createElement('div', { className: 'wc-block-components-payment-method-description' },
         decodeEntities(description)
     );

@@ -1,10 +1,10 @@
 <?php
 /**
- * Plugin Name: Breez Nodeless Payments for WooCommerce
+ * Plugin Name: Lightning Payments for WooCommerce
  * Plugin URI: https://github.com/breez-nodeless-woocommerce
- * Description: Accept Bitcoin payments in your WooCommerce store using Breez Nodeless Sdk.
+ * Description: Accept Bitcoin via the Lightning Network using the Breez SDK.
  * Version: 1.0.0
- * Author: Aljaz Ceru
+ * Author: Breez
  * Author URI: https://breez.technology
  * Text Domain: breez-woocommerce
  * Domain Path: /languages
@@ -539,8 +539,8 @@ function breez_register_blocks_scripts() {
         'wcSettings',
         [
             'breez' => [
-                'title' => !empty($settings['title']) ? $settings['title'] : 'Breez Nodeless Payments',
-                'description' => !empty($settings['description']) ? $settings['description'] : 'Pay with Lightning',
+                'title' => !empty($settings['title']) ? $settings['title'] : 'Pay with Lightning',
+                'description' => !empty($settings['description']) ? $settings['description'] : '',
                 'supports' => ['products'],
                 'showSavedCards' => false,
                 'canMakePayment' => true,

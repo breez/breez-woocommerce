@@ -37,7 +37,7 @@ class Breez_Unit_Test_Case extends WP_UnitTestCase {
         update_option('woocommerce_breez_settings', [
             'enabled' => 'yes',
             'title' => 'Breez Nodeless Payments',
-            'description' => 'Pay with Lightning',
+            'description' => '',
             'api_url' => 'https://api.test.breez.com',
             'api_key' => 'test_api_key',
             'webhook_secret' => 'test_webhook_secret',
