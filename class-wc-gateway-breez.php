@@ -56,7 +56,7 @@ class WC_Gateway_Breez extends WC_Payment_Gateway {
         $this->id                 = 'breez';
         $this->icon               = apply_filters('woocommerce_breez_icon', '');
         $this->has_fields         = false;
-        $this->method_title       = __('Lightning Payments', 'breez-woocommerce');
+        $this->method_title       = __('Pay with Lightning', 'breez-woocommerce');
         $this->method_description = __('', 'breez-woocommerce');
         $this->supports           = array(
             'products',
@@ -96,13 +96,8 @@ class WC_Gateway_Breez extends WC_Payment_Gateway {
             $this->logger->log('API Key: ' . ($this->api_key ? 'SET' : 'MISSING'), 'error');
             add_action('admin_notices', array($this, 'admin_api_notice'));
         }
-        
-        // Check webhook secret
-        $webhook_secret = $this->get_option('webhook_secret');
-        if ($this->enabled === 'yes' && empty($webhook_secret)) {
-            $this->logger->log('Webhook secret not configured', 'warning');
-            add_action('admin_notices', array($this, 'admin_webhook_secret_notice'));
-        }
+    
+
         
         // Initialize client, DB manager, payment handler
         try {
@@ -173,15 +168,6 @@ class WC_Gateway_Breez extends WC_Payment_Gateway {
     public function admin_payment_methods_notice() {
         echo '<div class="error"><p>' .
              __('Breez Payment Gateway requires at least one payment method to be selected. Please configure payment methods in the gateway settings.', 'breez-woocommerce') .
-             '</p></div>';
-    }
-    
-    /**
-     * Display admin notice for missing webhook secret
-     */
-    public function admin_webhook_secret_notice() {
-        echo '<div class="notice notice-warning is-dismissible"><p>' .
-             __('Breez Payment Gateway: Please configure a webhook secret in the gateway settings to secure your webhook endpoint.', 'breez-woocommerce') .
              '</p></div>';
     }
     
@@ -520,29 +506,51 @@ class WC_Gateway_Breez extends WC_Payment_Gateway {
             $this->logger->log("Payment for order #$order_id confirmed via API check", 'debug');
         }
         
-        // Load the payment instructions template
-        $template_path = BREEZ_WC_PLUGIN_DIR . 'templates/payment-instructions.php';
-        $this->logger->log("Loading template from: $template_path", 'debug');
-        
-        if (!file_exists($template_path)) {
-            $this->logger->log("Template file not found!", 'error');
-            return;
+        // Only show payment instructions when order is still pending
+        // and payment status is not SUCCEEDED or WAITING_CONFIRMATION
+        if ($order->get_status() === 'pending' && 
+            $api_payment_status !== 'SUCCEEDED' && 
+            $api_payment_status !== 'WAITING_CONFIRMATION') {
+            
+            // Load the payment instructions template
+            $template_path = BREEZ_WC_PLUGIN_DIR . 'templates/payment-instructions.php';
+            $this->logger->log("Loading payment instructions template from: $template_path", 'debug');
+            
+            if (!file_exists($template_path)) {
+                $this->logger->log("Template file not found!", 'error');
+                return;
+            }
+            
+            // Load the payment instructions template
+            wc_get_template(
+                'payment-instructions.php',
+                array(
+                    'order' => $order,
+                    'invoice_id' => $invoice_id,
+                    'payment_method' => $payment_method,
+                    'expiry' => $expiry,
+                    'current_time' => $current_time,
+                    'payment_status' => 'PENDING' // Force pending status to show payment instructions
+                ),
+                '',
+                BREEZ_WC_PLUGIN_DIR . 'templates/'
+            );
+        } else {
+            // Payment is already complete, show success message
+            wc_get_template(
+                'payment-instructions.php',
+                array(
+                    'order' => $order,
+                    'invoice_id' => $invoice_id,
+                    'payment_method' => $payment_method,
+                    'expiry' => $expiry,
+                    'current_time' => $current_time,
+                    'payment_status' => 'SUCCEEDED' // Force succeeded status to show success message
+                ),
+                '',
+                BREEZ_WC_PLUGIN_DIR . 'templates/'
+            );
         }
-        
-        // Load the payment instructions template
-        wc_get_template(
-            'payment-instructions.php',
-            array(
-                'order' => $order,
-                'invoice_id' => $invoice_id,
-                'payment_method' => $payment_method,
-                'expiry' => $expiry,
-                'current_time' => $current_time,
-                'payment_status' => $api_payment_status
-            ),
-            '',
-            BREEZ_WC_PLUGIN_DIR . 'templates/'
-        );
         
         $this->logger->log("Template loaded successfully for order #$order_id", 'debug');
     }

@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name: Lightning Payments for WooCommerce
- * Plugin URI: https://github.com/breez-nodeless-woocommerce
+ * Plugin URI: https://github.com/breez-woocommerce
  * Description: Accept Bitcoin via the Lightning Network using the Breez SDK.
  * Version: 1.0.0
  * Author: Breez
@@ -258,7 +258,28 @@ function breez_wc_check_payment_status_by_invoice_endpoint($request) {
         $logger->log('Direct payment status check endpoint called', 'debug');
 
         $invoice_id = $request->get_param('invoice_id');
+        if (empty($invoice_id)) {
+            $logger->log('No invoice ID provided', 'error');
+            return new WP_REST_Response(array(
+                'success' => false,
+                'message' => 'Invoice ID is required'
+            ), 400);
+        }
+
         $logger->log("Checking payment status for invoice ID: $invoice_id", 'debug');
+
+        // Initialize DB manager to get payment details
+        $db_manager = new Breez_DB_Manager();
+        $payment = $db_manager->get_payment_by_invoice($invoice_id);
+        
+        if (!$payment) {
+            $logger->log("No payment found for invoice ID: $invoice_id", 'error');
+            return new WP_REST_Response(array(
+                'success' => false,
+                'message' => 'Payment not found',
+                'status' => 'UNKNOWN'
+            ), 404);
+        }
 
         // Initialize API client - directly fetch gateway settings
         $gateway_settings = get_option('woocommerce_breez_settings');
@@ -279,11 +300,36 @@ function breez_wc_check_payment_status_by_invoice_endpoint($request) {
         $client = new Breez_API_Client($api_url, $api_key);
         $payment_status = $client->check_payment_status($invoice_id);
         $logger->log("Payment status for invoice ID $invoice_id: " . print_r($payment_status, true), 'debug');
+
+        // Update payment status in database if it has changed
+        if ($payment_status['status'] !== $payment['status']) {
+            $db_manager->update_payment_status($payment['order_id'], $payment_status['status']);
+            
+            // Get the order
+            $order = wc_get_order($payment['order_id']);
+            if ($order) {
+                // Update order status if needed
+                if ($payment_status['status'] === 'SUCCEEDED' && $order->get_status() === 'pending') {
+                    $order->payment_complete($invoice_id);
+                    $order->add_order_note(__('Payment confirmed via Breez API.', 'breez-woocommerce'));
+                    $order->save();
+                    $logger->log("Order #{$payment['order_id']} marked as complete", 'info');
+                } else if ($payment_status['status'] === 'FAILED' && $order->get_status() === 'pending') {
+                    $order->update_status('failed', __('Payment failed or expired.', 'breez-woocommerce'));
+                    $logger->log("Order #{$payment['order_id']} marked as failed", 'info');
+                }
+            }
+        }
         
         return new WP_REST_Response(array(
             'success' => true,
             'status' => $payment_status['status'],
-            'data' => $payment_status
+            'data' => array_merge($payment_status, array(
+                'order_id' => $payment['order_id'],
+                'payment_method' => $payment['metadata']['payment_method'],
+                'amount_sat' => $payment['metadata']['amount_sat'],
+                'expires_at' => $payment['metadata']['expires_at']
+            ))
         ), 200);
 
     } catch (Exception $e) {
@@ -415,30 +461,47 @@ function breez_wc_check_pending_payments() {
 /**
  * Plugin activation hook
  */
-function breez_wc_activate() {
-    // Include required files before using them
-    require_once BREEZ_WC_PLUGIN_DIR . 'includes/class-breez-logger.php';
-    require_once BREEZ_WC_PLUGIN_DIR . 'includes/class-breez-db-manager.php';
+function breez_wc_activate($network_wide = false) {
+    // Include all required files before using them
+    $required_files = array(
+        'includes/class-breez-logger.php',
+        'includes/class-breez-api-client.php',
+        'includes/class-breez-db-manager.php',
+        'includes/class-breez-payment-handler.php',
+        'includes/class-breez-webhook-handler.php'
+    );
     
-    // Initialize logger
+    foreach ($required_files as $file) {
+        $full_path = BREEZ_WC_PLUGIN_DIR . $file;
+        if (file_exists($full_path)) {
+            require_once $full_path;
+        }
+    }
+    
+    // Initialize logger first
     $logger = new Breez_Logger(true);
     $logger->log('Plugin activation started', 'info');
     
-    // Initialize DB manager
-    $db_manager = new Breez_DB_Manager();
-    
-    // Force drop and recreate the payments table with new schema
-    $logger->log('Forcing table recreation to update schema', 'info');
-    $db_manager->recreate_table();
-    
-    // Create required directories
-    $upload_dir = wp_upload_dir();
-    $breez_dir = $upload_dir['basedir'] . '/breez-wc';
-    if (!file_exists($breez_dir)) {
-        wp_mkdir_p($breez_dir);
+    // Make sure the DB Manager class exists before using it
+    if (class_exists('Breez_DB_Manager')) {
+        // Initialize DB manager
+        $db_manager = new Breez_DB_Manager();
+        
+        // Force drop and recreate the payments table with new schema
+        $logger->log('Installing database tables', 'info');
+        $db_manager->install_tables();
+        
+        // Create required directories
+        $upload_dir = wp_upload_dir();
+        $breez_dir = $upload_dir['basedir'] . '/breez-wc';
+        if (!file_exists($breez_dir)) {
+            wp_mkdir_p($breez_dir);
+        }
+        
+        $logger->log('Plugin activation completed', 'info');
+    } else {
+        $logger->log('ERROR: Unable to initialize DB manager - class not found', 'error');
     }
-    
-    $logger->log('Plugin activation completed', 'info');
 }
 register_activation_hook(__FILE__, 'breez_wc_activate');
 

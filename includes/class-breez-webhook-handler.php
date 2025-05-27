@@ -41,13 +41,13 @@ class Breez_Webhook_Handler {
         self::init_logger();
         
         try {
-            // Get the webhook secret from settings
+            // Get the API key from settings
             $settings = get_option('woocommerce_breez_settings', array());
-            $webhook_secret = isset($settings['webhook_secret']) ? $settings['webhook_secret'] : '';
+            $api_key = isset($settings['api_key']) ? $settings['api_key'] : '';
             
-            if (empty($webhook_secret)) {
-                self::$logger->log('Webhook validation failed: No webhook secret configured', 'error');
-                return new WP_Error('invalid_webhook', 'No webhook secret configured', array('status' => 401));
+            if (empty($api_key)) {
+                self::$logger->log('Webhook validation failed: No API key configured', 'error');
+                return new WP_Error('invalid_webhook', 'No API key configured', array('status' => 401));
             }
 
             // Get headers
@@ -83,9 +83,9 @@ class Breez_Webhook_Handler {
                 return new WP_Error('invalid_webhook', 'Nonce already used', array('status' => 401));
             }
 
-            // Calculate expected signature
+            // Calculate expected signature using API key instead of webhook secret
             $payload = $timestamp . $nonce . $body;
-            $expected_signature = hash_hmac('sha256', $payload, $webhook_secret);
+            $expected_signature = hash_hmac('sha256', $payload, $api_key);
 
             // Verify signature
             if (!hash_equals($expected_signature, $signature)) {

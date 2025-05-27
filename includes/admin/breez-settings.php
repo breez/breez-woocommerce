@@ -40,7 +40,7 @@ return array(
     'api_settings' => array(
         'title'       => __('API Settings', 'breez-woocommerce'),
         'type'        => 'title',
-        'description' => __('Enter your Breez API credentials below.', 'breez-woocommerce'),
+        'description' => __('Enter your Breez API credentials below. The API key will be used for both API authentication and webhook validation.', 'breez-woocommerce'),
     ),
     'api_url' => array(
         'title'       => __('API URL', 'breez-woocommerce'),
@@ -52,14 +52,7 @@ return array(
     'api_key' => array(
         'title'       => __('API Key', 'breez-woocommerce'),
         'type'        => 'password',
-        'description' => __('Enter your Breez API key.', 'breez-woocommerce'),
-        'default'     => '',
-        'desc_tip'    => true,
-    ),
-    'webhook_secret' => array(
-        'title'       => __('Webhook Secret', 'breez-woocommerce'),
-        'type'        => 'password',
-        'description' => __('Enter a secret key that will be used to validate webhook requests. This should be a random string of at least 32 characters.', 'breez-woocommerce'),
+        'description' => __('Enter your Breez API key. This key will be used for both API authentication and webhook validation.', 'breez-woocommerce'),
         'default'     => '',
         'desc_tip'    => true,
     ),

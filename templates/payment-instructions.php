@@ -147,19 +147,27 @@ var invoiceId = '<?php echo esc_js($invoice_id); ?>';
 var orderId = '<?php echo esc_js($order->get_id()); ?>';
 
 function checkPaymentStatus() {
+    console.log('Checking payment status for invoice:', invoiceId);
     fetch('/wp-json/breez-wc/v1/check-payment-status/' + invoiceId, {
         headers: {
             'Accept': 'application/json'
         }
     })
-    .then(response => response.json())
+    .then(response => {
+        console.log('Response status:', response.status);
+        return response.json();
+    })
     .then(data => {
+        console.log('Payment status data:', data);
         var paymentData = data.data || data;
+        console.log('Processed payment data:', paymentData);
         var statusContainer = document.getElementById('breez-payment-status');
-        
-        if (!statusContainer) return;
-        
+        if (!statusContainer) {
+            console.log('Status container not found');
+            return;
+        }
         if (paymentData.status === 'SUCCEEDED' || paymentData.status === 'WAITING_CONFIRMATION') {
+            console.log('Payment successful, updating UI');
             clearInterval(statusCheckInterval);
             statusContainer.innerHTML = `
                 <div class="breez-payment-completed">
@@ -168,8 +176,13 @@ function checkPaymentStatus() {
                 </div>
             `;
             // Reload page after successful payment
-            setTimeout(() => window.location.reload(), 2000);
+            console.log('Scheduling page reload');
+            setTimeout(() => {
+                console.log('Reloading page');
+                window.location.reload();
+            }, 2000);
         } else if (paymentData.status === 'FAILED') {
+            console.log('Payment failed, updating UI');
             clearInterval(statusCheckInterval);
             statusContainer.innerHTML = `
                 <div class="breez-payment-failed">
@@ -178,7 +191,7 @@ function checkPaymentStatus() {
                 </div>
             `;
         } else {
-            // For PENDING or any other status
+            console.log('Payment pending, updating UI');
             statusContainer.innerHTML = `
                 <div class="breez-payment-pending">
                     <p><?php _e('Waiting for payment...', 'breez-woocommerce'); ?></p>
@@ -187,14 +200,21 @@ function checkPaymentStatus() {
             `;
         }
     })
-    .catch(error => console.error('Error checking payment status:', error));
+    .catch(error => {
+        console.error('Error checking payment status:', error);
+        // Try to get more detailed error information
+        if (error.response) {
+            console.error('Error response:', error.response);
+        }
+    });
 }
+
+// Initial check
+console.log('Starting payment status checks');
+checkPaymentStatus();
 
 // Check payment status every 5 seconds
 var statusCheckInterval = setInterval(checkPaymentStatus, 5000);
-
-// Initial check
-checkPaymentStatus();
 
 // Copy invoice functionality
 var copyButton = document.querySelector('.breez-copy-button');

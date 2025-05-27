@@ -113,56 +113,101 @@ class Breez_API_Client {
      */
     public function check_payment_status($invoice_id) {
         try {
-            $response = $this->request('GET', "/check_payment_status/{$invoice_id}");
+            $url = $this->api_url . "/check_payment_status/{$invoice_id}?source=woocommerce";
             
-            if (!$response) {
-                throw new Exception('Failed to check payment status');
+            $response = wp_remote_get($url, array(
+                'headers' => array(
+                    'Content-Type' => 'application/json',
+                    'x-api-key' => $this->api_key
+                ),
+                'timeout' => 30
+            ));
+            
+            if (is_wp_error($response)) {
+                throw new Exception($response->get_error_message());
+            }
+
+            $body = wp_remote_retrieve_body($response);
+            $data = json_decode($body, true);
+
+            if (!$data) {
+                throw new Exception('Invalid response from API');
             }
 
             // Log the raw API response for debugging
             $this->logger->log('Payment status check response', 'debug', array(
                 'invoice_id' => $invoice_id,
-                'response' => $response
+                'response' => $data
             ));
 
-            // If the payment is not found, return pending instead of throwing an error
-            if ($response['status'] === 'UNKNOWN') {
+            // If the payment is not found, return pending with full details
+            if ($data['status'] === 'UNKNOWN') {
                 return array(
                     'status' => 'PENDING',
                     'destination' => $invoice_id,
-                    'sdk_status' => 'UNKNOWN'
+                    'sdk_status' => 'UNKNOWN',
+                    'amount_sat' => 0,
+                    'fees_sat' => 0,
+                    'payment_type' => 'UNKNOWN',
+                    'timestamp' => time(),
+                    'payment_hash' => null,
+                    'tx_id' => null,
+                    'swap_id' => null,
+                    'source' => 'woocommerce',
+                    'error' => null,
+                    'description' => null,
+                    'metadata' => array(),
+                    'exchange_rate' => null,
+                    'fiat_amount' => null,
+                    'fiat_currency' => null
                 );
             }
 
-            // Build response with all available details - keep original SDK status
-            $result = array(
-                'status' => $response['status'], // Keep original SDK status (SUCCEEDED, WAITING_CONFIRMATION, etc)
-                'sdk_status' => $response['status'],
-                'destination' => $invoice_id,
-                'amount_sat' => $response['amount_sat'] ?? null,
-                'fees_sat' => $response['fees_sat'] ?? null,
-                'timestamp' => $response['timestamp'] ?? null,
-                'error' => $response['error'] ?? null
+            // Extract payment details from response
+            $payment_details = $data['payment_details'] ?? array();
+            
+            // Return comprehensive payment status information
+            return array(
+                'status' => $data['status'],
+                'sdk_status' => $payment_details['sdk_status'] ?? $data['status'],
+                'destination' => $payment_details['destination'] ?? $invoice_id,
+                'amount_sat' => $payment_details['amount_sat'] ?? 0,
+                'fees_sat' => $payment_details['fees_sat'] ?? 0,
+                'payment_type' => $payment_details['payment_type'] ?? 'UNKNOWN',
+                'timestamp' => $payment_details['timestamp'] ?? time(),
+                'payment_hash' => $payment_details['payment_hash'] ?? null,
+                'tx_id' => $payment_details['tx_id'] ?? null,
+                'swap_id' => $payment_details['swap_id'] ?? null,
+                'source' => $payment_details['source'] ?? 'woocommerce',
+                'error' => $payment_details['error'] ?? null,
+                'description' => $payment_details['description'] ?? null,
+                'metadata' => $payment_details['metadata'] ?? array(),
+                'exchange_rate' => $payment_details['exchange_rate'] ?? null,
+                'fiat_amount' => $payment_details['fiat_amount'] ?? null,
+                'fiat_currency' => $payment_details['fiat_currency'] ?? null
             );
-
-            // Include payment details if available
-            if (isset($response['payment_details'])) {
-                $result['payment_details'] = $response['payment_details'];
-            }
-
-            // Add human-readable status description
-            $result['status_description'] = $this->get_status_description($response['status']);
-
-            return $result;
 
         } catch (Exception $e) {
             $this->logger->log('Payment status check error: ' . $e->getMessage(), 'error');
-            // Return pending status instead of throwing an error
+            // Return pending status with error information
             return array(
                 'status' => 'PENDING',
                 'sdk_status' => 'UNKNOWN',
                 'destination' => $invoice_id,
-                'error' => $e->getMessage()
+                'amount_sat' => 0,
+                'fees_sat' => 0,
+                'payment_type' => 'UNKNOWN',
+                'timestamp' => time(),
+                'payment_hash' => null,
+                'tx_id' => null,
+                'swap_id' => null,
+                'source' => 'woocommerce',
+                'error' => $e->getMessage(),
+                'description' => null,
+                'metadata' => array(),
+                'exchange_rate' => null,
+                'fiat_amount' => null,
+                'fiat_currency' => null
             );
         }
     }
