@@ -11,7 +11,9 @@ Lightning Payments for WooCommerce is a simple Woocommerce extension that enable
 2. Copy the `breez-woocommerce` folder to your WordPress `wp-content/plugins/` directory.
 3. In your WordPress admin dashboard, go to **Plugins** and activate **Breez WooCommerce**.
 4. Go to **WooCommerce > Settings > Payments** and enable the Breez payment gateway.
-5. Enter your Breez Nodeless Payments API credentials and configure the gateway as needed.
+5. Go to **WooCommerce > Settings > Payments** and click **Manage** at **Pay with Lightning**. Enter the url and api key you configured when deploying [payments-rest-api](https://github.com/breez/payments-rest-api)
+![plugin-settings](./docs/plugin-settings.jpg)
+
 
 ## Requirements
 - WordPress 5.0 or higher
