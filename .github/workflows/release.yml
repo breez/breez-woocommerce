@@ -7,9 +7,9 @@ on:
 
 jobs:
     - name: Create artifact
-          uses: montudor/action-zip@v0.1.0
-          with:
-            args: zip -X -r build/breez-woocommerce.zip . -x *.git* -x composer.lock -x composer.json -x tests/*
+      uses: montudor/action-zip@v0.1.0
+      with:
+        args: zip -X -r build/breez-woocommerce.zip . -x *.git* -x composer.lock -x composer.json -x tests/* -x .github/*
     - name: Upload zip to release
       uses: svenstaro/upload-release-action@v2
       with:
