@@ -4,18 +4,21 @@ on:
   push:
     tags:
       - '*'
-
 jobs:
-    - name: Create artifact
-      uses: montudor/action-zip@v0.1.0
-      with:
-        args: zip -X -r build/breez-woocommerce.zip . -x *.git* -x composer.lock -x composer.json -x tests/* -x .github/*
-    - name: Upload zip to release
-      uses: svenstaro/upload-release-action@v2
-      with:
-        repo_token: ${{ secrets.GITHUB_TOKEN }}
-        file: build/breez-woocommerce.zip
-        asset_name: breez-woocommerce.zip
-        tag: ${{ github.ref }}
-        overwrite: true
-        body: "Breez woocommerce plugin"
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Create artifact
+        uses: montudor/action-zip@v0.1.0
+        with:
+          args: zip -X -r build/breez-woocommerce.zip . -x *.git* -x composer.lock -x composer.json -x tests/* -x .github/*
+      - name: Upload zip to release
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: build/breez-woocommerce.zip
+          asset_name: breez-woocommerce.zip
+          tag: ${{ github.ref }}
+          overwrite: true
+          body: "Breez woocommerce plugin"
