@@ -6,15 +6,10 @@ on:
       - '*'
 
 jobs:
-  build:
-    name: Publish binaries
-    runs-on: ubuntu-latest
-
-    steps:
- - name: Create artifact
-        uses: montudor/action-zip@v0.1.0
-        with:
-          args: zip -X -r build/breez-woocommerce.zip . -x *.git* -x composer.lock -x composer.json
+    - name: Create artifact
+          uses: montudor/action-zip@v0.1.0
+          with:
+            args: zip -X -r build/breez-woocommerce.zip . -x *.git* -x composer.lock -x composer.json -x tests/*
     - name: Upload zip to release
       uses: svenstaro/upload-release-action@v2
       with:
