@@ -22,4 +22,4 @@ Lightning Payments for WooCommerce is a simple Woocommerce extension that enable
 
 ## REST api
 
-The WooCommerce plugin requires a separate REST API service to handle Lightning payments - a deployment of [payments-rest-api](https://github.com/breez/payments-rest-api). You can easily deploy it to fly.io free tier, just follow [this documentation](fly/README.md).
+The WooCommerce plugin requires a separate REST API service to handle Lightning payments - a deployment of [payments-rest-api](https://github.com/breez/payments-rest-api). You can easily deploy it to fly.io free tier, just follow documentation in [deployment options for payments-rest-api](https://github.com/breez/payments-rest-api/tree/main?tab=readme-ov-file#deployment-options).
