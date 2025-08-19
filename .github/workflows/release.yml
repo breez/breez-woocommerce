@@ -19,13 +19,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.0'
-          coverage: none
-          tools: composer
-
       - name: Get plugin version
         id: get_version
         run: |
@@ -39,12 +32,24 @@ jobs:
           echo "version=${VERSION#v}" >> $GITHUB_OUTPUT
           echo "Building version: ${VERSION#v}"
 
-      - name: Build plugin zip
-        uses: 10up/action-wordpress-plugin-build-zip@stable
-        with:
-          generate-zip: true
-        env:
-          SLUG: breez-woocommerce
+      - name: Create plugin zip
+        run: |
+          # Create a temporary directory for the plugin
+          mkdir -p /tmp/plugin-build/breez-woocommerce
+          
+          # Copy files based on .distignore (exclude what's in .distignore)
+          rsync -av --exclude-from='.distignore' ./ /tmp/plugin-build/breez-woocommerce/
+          
+          # Create the zip file
+          cd /tmp/plugin-build
+          zip -r breez-woocommerce.zip breez-woocommerce/
+          
+          # Move zip to workspace
+          mv breez-woocommerce.zip $GITHUB_WORKSPACE/
+          
+          # Show what files are included in the zip
+          echo "Files included in the plugin zip:"
+          unzip -l $GITHUB_WORKSPACE/breez-woocommerce.zip
 
       - name: Upload zip as release asset
         if: github.event_name == 'release'
