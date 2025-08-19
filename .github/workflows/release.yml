@@ -1,24 +1,65 @@
-name: Publish zip
+name: Build and Release Plugin
 
 on:
-  push:
-    tags:
-      - '*'
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to build (optional, defaults to latest)'
+        required: false
+        type: string
+
 jobs:
   build:
+    name: Build Plugin Zip
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v2
-      - name: Create artifact
-        uses: montudor/action-zip@v0.1.0
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
         with:
-          args: zip -X -r build/breez-woocommerce.zip . -x *.git* -x composer.lock -x composer.json -x tests/* -x .github/*
-      - name: Upload zip to release
-        uses: svenstaro/upload-release-action@v2
+          php-version: '8.0'
+          coverage: none
+          tools: composer
+
+      - name: Get plugin version
+        id: get_version
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            VERSION=${{ github.event.release.tag_name }}
+          elif [ "${{ inputs.tag }}" != "" ]; then
+            VERSION=${{ inputs.tag }}
+          else
+            VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "dev")
+          fi
+          echo "version=${VERSION#v}" >> $GITHUB_OUTPUT
+          echo "Building version: ${VERSION#v}"
+
+      - name: Build plugin zip
+        uses: 10up/action-wordpress-plugin-build-zip@stable
         with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: build/breez-woocommerce.zip
-          asset_name: breez-woocommerce.zip
-          tag: ${{ github.ref }}
-          overwrite: true
-          body: "Breez woocommerce plugin"
+          generate-zip: true
+        env:
+          SLUG: breez-woocommerce
+
+      - name: Upload zip as release asset
+        if: github.event_name == 'release'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./breez-woocommerce.zip
+          asset_name: breez-woocommerce-${{ steps.get_version.outputs.version }}.zip
+          asset_content_type: application/zip
+
+      - name: Upload zip as workflow artifact
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: breez-woocommerce-${{ steps.get_version.outputs.version }}
+          path: ./breez-woocommerce.zip
