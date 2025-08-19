@@ -34,11 +34,15 @@ jobs:
 
       - name: Create plugin zip
         run: |
-          # Create a temporary directory for the plugin
+          # Create plugin directory
           mkdir -p /tmp/plugin-build/breez-woocommerce
           
-          # Copy files based on .distignore (exclude what's in .distignore)
-          rsync -av --exclude-from='.distignore' ./ /tmp/plugin-build/breez-woocommerce/
+          # Copy only the files needed for WordPress plugin
+          cp breez-woocommerce.php /tmp/plugin-build/breez-woocommerce/
+          cp class-wc-gateway-breez.php /tmp/plugin-build/breez-woocommerce/
+          cp -r includes/ /tmp/plugin-build/breez-woocommerce/
+          cp -r assets/ /tmp/plugin-build/breez-woocommerce/
+          cp -r templates/ /tmp/plugin-build/breez-woocommerce/
           
           # Create the zip file
           cd /tmp/plugin-build
